@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+tokens.json
+tokens.json.tmp
+data/*.db
+data/*.db-*

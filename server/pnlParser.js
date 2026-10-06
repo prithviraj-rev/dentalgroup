@@ -1,71 +1,103 @@
-// Flattens a QBO ProfitAndLoss report (summarize_column_by=Month) into
-// { account_name, account_type, period: 'YYYY-MM', amount } rows.
+// Flattens a QBO ProfitAndLoss report (summarize_column_by=Month) into rows:
+//   { account_name, account_id, grp, period_start, period_end, amount }
 //
-// Report shape (abridged):
-//   Columns.Column: [{ColType:'Account'}, {ColType:'Money', MetaData:[{Name:'StartDate',Value:'2024-10-01'},...]}, ..., {ColTitle:'Total'}]
-//   Rows.Row: top-level Sections with group Income | COGS | GrossProfit | Expenses | NetOperatingIncome |
-//             OtherIncome | OtherExpenses | NetOtherIncome | NetIncome.
-//   Parent accounts are nested Sections (Header = parent name, Summary = "Total <parent>").
+// Report shape:
+//   Columns.Column[0]        account-name column
+//   Columns.Column[1..n-1]   one per month; true dates in MetaData StartDate / EndDate
+//   Columns.Column[n]        "Total" (ignored)
+//   Rows.Row[]               recursive. type "Section" = { Header?, Rows?.Row[], Summary? }
+//                            type "Data"    = leaf account line, ColData[0] = { value: name, id: account id }
+//   Top-level sections carry `group`: Income | COGS | GrossProfit | Expenses | NetOperatingIncome |
+//   OtherIncome | OtherExpenses | NetOtherIncome | NetIncome.
 //
-// Only leaf Data rows are kept - Summary/total rows are skipped so SUM() in SQL never double counts.
-// Amounts are stored as reported: expenses are positive numbers under an expense account_type.
+// Rules:
+//   - emit one row per non-empty month cell of every Data row
+//   - a Section whose Header has an account id AND amounts (a parent account with its own postings)
+//     also emits rows for its header amounts
+//   - Summary rows are never stored; computed groups (GrossProfit, NetOperatingIncome, NetOtherIncome,
+//     NetIncome) are skipped entirely
+//   - the nearest top-level group is propagated down as `grp`
 
-export const ACCOUNT_TYPES = {
-  Income: 'Income',
-  COGS: 'Cost of Goods Sold',
-  Expenses: 'Expense',
-  OtherIncome: 'Other Income',
-  OtherExpenses: 'Other Expense',
+export const GROUPS = ['Income', 'COGS', 'Expenses', 'OtherIncome', 'OtherExpenses'];
+
+const COMPUTED_GROUPS = new Set(['GrossProfit', 'NetOperatingIncome', 'NetOtherIncome', 'NetIncome']);
+
+// Fallback when a top-level section has no `group` field: map its header title.
+const HEADER_TO_GROUP = {
+  income: 'Income',
+  'cost of goods sold': 'COGS',
+  expenses: 'Expenses',
+  'other income': 'OtherIncome',
+  'other expenses': 'OtherExpenses',
 };
 
-const MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-
-function columnPeriod(col) {
-  if (col.ColType !== 'Money') return null;
-  const meta = Object.fromEntries((col.MetaData || []).map((m) => [m.Name, m.Value]));
-  if (meta.StartDate) return meta.StartDate.slice(0, 7);
-  // Fallback for titles like "Jan 2025" or "Jan 1-15, 2025"
-  const m = /^([A-Z][a-z]{2})\b.*?(\d{4})$/.exec(col.ColTitle || '');
-  return m && MONTHS[m[1]] ? `${m[2]}-${String(MONTHS[m[1]]).padStart(2, '0')}` : null;
+function monthColumns(columns) {
+  const last = columns.length - 1;
+  return columns.map((col, i) => {
+    if (i === 0 || i === last) return null; // account column / Total column
+    const meta = Object.fromEntries((col.MetaData || []).map((m) => [m.Name, m.Value]));
+    if (!meta.StartDate || !meta.EndDate) return null;
+    return { start: meta.StartDate, end: meta.EndDate };
+  });
 }
 
 export function parseProfitAndLoss(report) {
-  const periods = (report?.Columns?.Column || []).map(columnPeriod);
+  const columns = report?.Columns?.Column || [];
+  const periods = monthColumns(columns);
   const out = [];
 
-  const walk = (rows, accountType, parents) => {
+  const emit = (colData, grp) => {
+    const first = colData?.[0];
+    const name = first?.value?.trim();
+    if (!name) return;
+    const id = first.id != null && String(first.id) !== '' ? String(first.id) : null;
+    colData.forEach((cell, i) => {
+      const p = periods[i];
+      if (!p) return;
+      const raw = cell?.value;
+      if (raw == null || String(raw).trim() === '') return; // empty string = no value
+      const amount = parseFloat(String(raw).replace(/,/g, ''));
+      if (!Number.isFinite(amount)) return;
+      out.push({ account_name: name, account_id: id, grp, period_start: p.start, period_end: p.end, amount });
+    });
+  };
+
+  const walk = (rows, grp, depth) => {
     for (const row of rows?.Row || []) {
-      if (row.Rows || row.type === 'Section') {
-        const header = row.Header?.ColData?.[0]?.value;
-        if (accountType) {
-          // Nested section = parent account with sub-accounts.
-          walk(row.Rows, accountType, header ? [...parents, header] : parents);
-        } else {
-          // Top-level section: GrossProfit / NetIncome etc. have no Rows, so they fall through harmlessly.
-          const type = ACCOUNT_TYPES[row.group] || header;
-          if (type) walk(row.Rows, type, []);
+      const isSection = row.type === 'Section' || row.Rows != null;
+      if (isSection) {
+        let g = grp;
+        if (depth === 0) {
+          const header = row.Header?.ColData?.[0]?.value?.trim().toLowerCase();
+          g = row.group || HEADER_TO_GROUP[header] || null;
+          if (!g || COMPUTED_GROUPS.has(g)) continue;
         }
-        continue;
+        if (!g) continue;
+        const h = row.Header?.ColData;
+        if (h?.[0]?.id != null && String(h[0].id) !== '') emit(h, g); // parent account with own amounts
+        walk(row.Rows, g, depth + 1);
+        continue; // Summary rows are intentionally ignored
       }
-
-      const cells = row.ColData;
-      if (!cells || !accountType) continue;
-      const name = cells[0]?.value?.trim();
-      if (!name) continue;
-      // A parent's own postings appear as a Data row named after the parent.
-      const pathParts = parents.at(-1) === name ? parents : [...parents, name];
-      const accountName = pathParts.join(':');
-
-      cells.forEach((cell, i) => {
-        const period = periods[i];
-        if (!period || cell.value === '' || cell.value == null) return;
-        const amount = Number(cell.value);
-        if (!Number.isFinite(amount) || amount === 0) return;
-        out.push({ account_name: accountName, account_type: accountType, period, amount });
-      });
+      if (row.type === 'Data' && row.ColData && grp) emit(row.ColData, grp);
     }
   };
 
-  walk(report?.Rows, null, []);
+  walk(report?.Rows, null, 0);
   return out;
+}
+
+/**
+ * Collapse rows onto the storage key (account_id, period_start). Rows without an account id
+ * get a stable synthetic id derived from the name so the unique index still applies.
+ */
+export function dedupeForStorage(rows) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const account_id = r.account_id ?? `name:${r.account_name}`;
+    const key = `${account_id}|${r.period_start}`;
+    const prev = byKey.get(key);
+    if (prev) prev.amount = Math.round((prev.amount + r.amount) * 100) / 100;
+    else byKey.set(key, { ...r, account_id });
+  }
+  return [...byKey.values()];
 }

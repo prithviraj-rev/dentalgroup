@@ -1,29 +1,26 @@
 {
   "name": "dentalgroup",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "POC: pull QuickBooks Online P&L from multiple sandbox companies into SQLite and chart it",
+  "description": "POC: QuickBooks Online multi-company P&L sync (Express + SQLite) and dashboard (React + Vite + Recharts + Tailwind)",
   "type": "module",
   "engines": {
     "node": ">=20.12"
   },
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
-    "connect": "node server/index.js",
-    "sync": "node scripts/sync.js",
-    "dashboard": "concurrently -k -n api,web -c blue,magenta \"node server/index.js\" \"vite --config dashboard/vite.config.js\"",
-    "build:dashboard": "vite build --config dashboard/vite.config.js",
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
+    "server": "npm run dev -w server",
+    "web": "npm run dev -w web",
+    "sync": "curl -s -X POST http://localhost:3000/sync",
+    "sync:node": "node scripts/sync.js",
+    "build": "npm run build -w web",
     "test": "node --test test/"
   },
-  "dependencies": {
-    "better-sqlite3": "~11.10.0",
-    "express": "^4.21.2"
-  },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^9.2.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.15.4",
-    "vite": "^6.3.6"
+    "concurrently": "^9.2.1"
   }
 }

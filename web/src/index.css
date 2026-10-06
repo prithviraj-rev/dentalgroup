@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Series colors follow the entity: income is always slot 1, expenses slot 2,
+   net income slot 3; offices take slots 1-8 in a fixed order. Dark values are the same hues
+   re-stepped for the dark surface, not an automatic flip. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --line: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.1);
+  --good: #006300;
+  --bad: #d03b3b;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --line: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255, 255, 255, 0.1);
+    --good: #0ca30c;
+    --bad: #e66767;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+  }
+}
+
+html, body {
+  background: var(--page);
+  color: var(--ink);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+}
+
+.control {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  padding: 6px 10px;
+  height: 36px;
+}
+.control:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 1px;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  height: 36px;
+}
+.seg button {
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.seg button + button {
+  border-left: 1px solid var(--ring);
+}
+.seg button[aria-pressed='true'] {
+  background: var(--series-1);
+  color: #fff;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.seg.seg-sm {
+  height: 28px;
+}
+.seg.seg-sm button {
+  padding: 0 8px;
+  font-size: 12px;
+}

@@ -1,7 +1,7 @@
 node_modules/
 dist/
 .env
+data/
+*.db
+*.db-*
 tokens.json
-tokens.json.tmp
-data/*.db
-data/*.db-*

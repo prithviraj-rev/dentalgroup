@@ -1,65 +1,189 @@
-# dentalgroup: QBO P&L multi-company POC
+# QuickBooks multi-company P&L dashboard (POC)
 
-Connects to several QuickBooks Online (sandbox) companies with OAuth 2.0, pulls a monthly Profit & Loss report from each into SQLite, and shows it in a React + Recharts dashboard: per-office or consolidated, monthly / quarterly / YOY, with an adjustable timeline.
+Connects several QuickBooks Online **sandbox** companies with OAuth 2.0, pulls each company's monthly
+Profit & Loss report into SQLite, and shows them in a React dashboard: all offices or one, monthly /
+quarterly / yearly, with a YoY comparison and a per-account breakdown.
 
 ```
-QBO companies ──OAuth (one per realmId)──▶ tokens.json
-             ──ProfitAndLoss report──▶ npm run sync ──▶ data/pnl.db (SQLite)
-                                                        │
-                        Express API (:3000/api) ◀───────┘
-                                   │
-                        React dashboard (Vite :5173)
+QBO companies ──OAuth, one per realmId──▶ SQLite connections
+             ──ProfitAndLoss report────▶ POST /sync ──▶ SQLite pl_lines (+ sync_logs)
+                                                          │
+                        Express API  http://localhost:3000/api ◀─┘
+                                   │  CORS
+                        React + Vite dashboard  http://localhost:5173
+```
+
+```
+server/   Express + better-sqlite3: OAuth, /sync, /api
+web/      React + Vite + Recharts + Tailwind dashboard
+test/     parser + upsert tests (node --test)
+scripts/  node fallback for `npm run sync`
+data/     pnl.db is created here on first run (gitignored)
 ```
 
 ## Setup
 
-Requires Node 20.12+.
+Requires **Node.js 20.12+**. No Docker.
 
-1. In the Intuit developer portal, open your app, go to **Keys & credentials (Development)** and add the redirect URI `http://localhost:3000/callback`.
-2. `copy .env.example .env`, then fill in `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET`.
-3. `npm install`
+1. **Intuit app.** In the [Intuit developer portal](https://developer.intuit.com), open your app, go to
+   **Keys & credentials (Development)** and add `http://localhost:3000/callback` to the **Redirect URIs**
+   list (same place as the Postman URI). Copy the Development Client ID and Client Secret.
+2. **Credentials.** Edit `.env` at the repo root (already created from `.env.example`, gitignored) and
+   replace the two placeholders:
+   ```
+   QBO_CLIENT_ID=<PASTE_ID>
+   QBO_CLIENT_SECRET=<PASTE_SECRET>
+   ```
+3. **Install and run.**
+   ```
+   npm install
+   npm run dev
+   ```
+   This starts the API server on http://localhost:3000 and the dashboard on http://localhost:5173.
+
+## Connecting each sandbox company
+
+Repeat once per company:
+
+1. Open http://localhost:3000/connect in the browser.
+2. Sign in with your Intuit developer account and, on the consent screen, **pick the sandbox company**
+   you want to connect, then click **Connect**.
+3. Intuit redirects to `/callback`. The server exchanges the code for tokens, reads `realmId` from the
+   query string, looks up the company name, and stores the connection in SQLite.
+4. You land on http://localhost:3000/ which lists every connected company. Click **Connect a QuickBooks
+   company** again for the next one.
+
+Need more sandbox companies? In the developer portal use **Sandbox** → **Add a sandbox company**.
+Each sandbox company gets its own realmId, so each one is a separate "office" here.
+
+## Syncing
+
+Any of these runs the same sync, which loops over every connected company:
+
+- **Sync now** button in the dashboard (shows a toast with per-company results)
+- `npm run sync` (curl) or `npm run sync:node` (no curl needed), with the server running
+- `POST http://localhost:3000/sync`
+
+For each company it calls
+`GET /v3/company/{realmId}/reports/ProfitAndLoss?start_date=2025-01-01&end_date=2026-12-31&summarize_column_by=Month`
+(the window is configurable with `SYNC_START_DATE` / `SYNC_END_DATE` in `.env`), flattens the report
+tree into account × month rows and upserts them into `pl_lines`. Each company's success or failure is
+written to `sync_logs`. Access tokens are refreshed automatically when within 5 minutes of expiry, and
+the rotated refresh token is persisted.
+
+## Dashboard
+
+- **Header:** office selector (All offices, each office, or **Compare offices…**), from/to month pickers,
+  Monthly / Quarterly / Yearly toggle, YoY switch, Sync now.
+- **KPI cards:** total income, total expenses, net income for the range. With YoY on, each shows the %
+  change vs the same range one year earlier.
+- **Main chart:** income, expenses and net income per period. A picker on the card switches the form:
+  *Bars + line* (default: income and expense bars, net income line), *Lines*, *Grouped bars*, or
+  *Stacked* (expense groups stacked to show the composition of spend, with income and net income as
+  lines). All values are money, so every form shares one y-axis.
+- **Office chart:** one metric per office, shown on the All offices view (net income) and in compare
+  mode (chosen metric). Forms: *Lines* (default), *Grouped bars*, *Stacked* (offices stacked to the
+  combined total), *Small multiples* (one panel per office on a shared scale, best for 3+ offices) and
+  *Ranked totals* (horizontal bars of each office's total over the range, largest first).
+- Chart choices are remembered in the URL (`mainChart`, `officeChart`); the offered forms and the
+  defaults are set in `charts` in `app.config.json`, and `charts.showPicker: false` hides the pickers.
+- **Account breakdown:** every account grouped under Income / COGS / Expenses / Other income / Other
+  expenses with per-period totals, collapsible groups, group subtotals and a net income row.
+- **Compare offices:** choose `Compare offices…` in the office selector, then tick 2 to 4 offices
+  (`compare.maxOffices`). Pick a metric (income, expenses or net income) and you get one tile per office
+  with YoY, one line per office on the chart, an office × period table with a combined row, and the
+  account breakdown with one column per office. Office colors are fixed per office, so they stay the
+  same whichever subset you pick.
+- The view is mirrored into the URL (`?office=id,id&from=…&to=…&granularity=…&metric=…&yoy=1`), so a
+  comparison can be bookmarked or shared.
+- Light and dark mode follow the OS setting.
+
+Definitions: `income = Income + OtherIncome`, `expenses = COGS + Expenses + OtherExpenses`,
+`netIncome = income − expenses`, which equals the report's Net Income line. Group membership is
+configurable (see below).
+
+## Configuration
+
+Two files, by kind of setting:
+
+| File | Holds | Read by |
+|---|---|---|
+| `.env` (gitignored) | secrets, ports, paths: `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI`, `QBO_ENVIRONMENT`, `PORT`, `WEB_ORIGIN`, `DB_PATH`, `APP_CONFIG_PATH`, plus optional overrides `SYNC_START_DATE`, `SYNC_END_DATE`, `SYNC_ACCOUNTING_METHOD`, `QBO_MINOR_VERSION` | server |
+| `app.config.json` | behaviour: dashboard defaults, compare limits, office chart, metric labels, P&L groups, sync window, QBO client settings | server, and the dashboard via `GET /api/config` |
+
+Every key in `app.config.json` is optional; missing keys take the built-in defaults, and invalid values
+fail at startup with a message naming the key. Restart `npm run dev` after editing either file.
+
+| Key | Meaning |
+|---|---|
+| `dashboard.title`, `locale`, `currency` | Page title and number formatting. |
+| `dashboard.defaultOffice` | `all`, a realmId, or `id,id` to open in compare mode. |
+| `dashboard.defaultRange` | `from`/`to` as `YYYY-MM` (`to: "current"` = this month); `snapToData` snaps to the synced range on load. |
+| `dashboard.defaultGranularity`, `granularities` | Default and available buckets (`month`, `quarter`, `year`). |
+| `dashboard.defaultYoy`, `chartHeights`, `syncToastSeconds` | YoY on by default, chart heights in px, toast durations. |
+| `compare.maxOffices`, `minOffices` | Selection limits for compare mode (enforced by the API too). |
+| `compare.metrics`, `defaultMetric` | Metrics offered in compare mode. |
+| `officeChart.enabled`, `maxOffices`, `metric` | The per-office chart on the All offices view (max 8, one palette slot each). |
+| `charts.main`, `charts.office` | `default` form and the `options` offered by each chart's picker (main: combo, lines, bars, stacked; office: lines, bars, stacked, small, ranked). |
+| `charts.showPicker` | `false` hides the pickers and always uses the defaults. |
+| `groups.colors` | Palette slot (1–8) per P&L group, used by the stacked main chart. |
+| `metrics.<key>` | Label, `upIsGood` (colors the YoY delta) and palette slot per metric. |
+| `groups.order`, `labels`, `incomeGroups`, `expenseGroups` | P&L groups, their display names and which side of net income they sit on. |
+| `sync.startDate`, `endDate`, `accountingMethod` | Report window and `Accrual` / `Cash`. `.env` values override these. |
+| `qbo.minorVersion`, `refreshSkewMinutes`, `oauthStateTtlMinutes` | API minor version, how early to refresh tokens, OAuth state lifetime. |
+
+## API
+
+| Route | Description |
+|---|---|
+| `GET /connect` | Starts the OAuth flow (state is generated and checked). |
+| `GET /callback` | Exchanges the code, stores `{realmId, companyName, accessToken, refreshToken, expiresAt}`. |
+| `GET /` | Connections page (list, connect, disconnect). |
+| `POST /sync` | Syncs every connected company. Returns `{companies, succeeded, failed, results[]}`. |
+| `GET /api/config` | The merged `app.config.json` (no secrets). |
+| `GET /api/offices` | Connected offices with line counts, last sync and a stable `colorIndex`. |
+| `GET /api/meta` | Synced period range, line count, last sync, connection count. |
+| `GET /api/pl?granularity=month\|quarter\|year&from=YYYY-MM&to=YYYY-MM&office=realmId\|all\|id,id` | `office` may be a comma list of up to `compare.maxOffices` realmIds. Per period: totals per grp, plus `income`, `expenses`, `netIncome`; `rows` as flat `(period, grp, amount)`; `offices[]` with per-office per-period figures and totals. |
+| `GET /api/pl/accounts?…&by=period\|office` | Same filters; per-account totals with one column per period, or per office when `by=office`. |
+| `GET /api/sync/logs` | Last 50 sync log entries. |
+
+## Data model (SQLite, `data/pnl.db`)
+
+- `connections(realm_id PK, company_name, access_token, refresh_token, expires_at, refresh_token_expires_at, connected_at, updated_at)`
+- `pl_lines(office_realm_id, office_name, account_name, account_id, grp, period_start, period_end, amount)`
+  with `UNIQUE (office_realm_id, account_id, period_start)`. `grp` is one of Income, COGS, Expenses,
+  OtherIncome, OtherExpenses. Only account rows are stored, never report summaries, so `SUM()` never
+  double counts.
+- `sync_logs(id, realm_id, company_name, status, row_count, message, start_date, end_date, started_at, finished_at)`
+
+### How the report is parsed (`server/pnlParser.js`)
+
+- `Columns.Column[0]` is the account column, the last column is `Total`; every column in between is a
+  month whose dates come from the `StartDate` / `EndDate` MetaData entries (titles are never parsed).
+- `Rows.Row[]` is recursive. `Section` rows have an optional `Header`, nested `Rows.Row[]` and a
+  `Summary`; `Data` rows are account lines. One row is emitted per non-empty month cell of each `Data`
+  row (empty string = no value). A `Section` whose `Header` carries an account id and amounts (a parent
+  account with its own postings) also emits rows for those header amounts.
+- The nearest top-level `group` is propagated down as `grp`. Computed groups (GrossProfit,
+  NetOperatingIncome, NetOtherIncome, NetIncome) and all `Summary` rows are ignored.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run connect` | Starts the server on http://localhost:3000. Click **Connect a QuickBooks company** once per sandbox company, choosing a different company on Intuit's consent screen each time. Tokens are saved per `realmId` in `tokens.json`. |
-| `npm run sync` | For every company in `tokens.json`, fetches `ProfitAndLoss` with `summarize_column_by=Month` for the last 24 months (including the current month to date) and replaces that company's rows in `data/pnl.db`. Options: `-- --months 36`, `-- --method Cash`, `-- --realm <id>`. |
-| `npm run dashboard` | Starts the API server (:3000) and the Vite dev server (:5173) together. Stop `npm run connect` first, since both use port 3000. |
-| `npm test` | Unit tests for the P&L report parser. |
-
-To create extra sandbox companies, use **Sandbox** in the developer portal (you can have several per account).
-
-## Data
-
-`pnl_rows` table in SQLite:
-
-| column | notes |
-|---|---|
-| realm_id | QBO company id |
-| office_name | QBO company name by default. To rename an office, set `office_name` in `tokens.json` and re-run sync. |
-| account_name | Sub-accounts are written as `Parent:Child`, the same convention QBO uses for fully qualified names. |
-| account_type | Income, Cost of Goods Sold, Expense, Other Income, Other Expense (taken from the report section) |
-| period | `YYYY-MM` |
-| amount | As reported. Expenses are positive. Only leaf account rows are stored, so `SUM()` never double counts subtotals. |
-
-Net income = Income − COGS − Expense + Other Income − Other Expense. This matches the report's Net Income line, and a test checks it.
-
-`sync_runs` records each company's last sync.
-
-## Dashboard
-
-- **Office:** all offices (consolidated) or a single office.
-- **View:** Monthly or Quarterly (revenue and costs as columns, net income as a line), or YOY (one line per calendar year across Jan–Dec for a chosen metric, plus a table with like-for-like % change).
-- **Timeline:** all synced months, last 24/12/6/3 months, year to date, or a custom from/to month.
-- KPI tiles compare against the prior period of equal length when that period has been synced.
-- The consolidated view adds an office ranking. Every view includes the largest cost accounts and a full P&L statement table.
-- You can set the initial state in the URL: `?office=all&view=yoy&timeline=12&metric=netIncome`.
-- Supports light and dark mode.
+| `npm run dev` | Server (:3000) + dashboard (:5173) together. |
+| `npm run server` / `npm run web` | Either one alone. |
+| `npm run sync` | `curl -X POST http://localhost:3000/sync`. |
+| `npm run sync:node` | Same via Node fetch (for shells without curl). |
+| `npm test` | Parser, upsert and config tests. |
+| `npm run build` | Production build of the dashboard into `web/dist`. |
 
 ## Notes and limits (POC)
 
-- Tokens are stored in plain JSON. Access tokens last 1 hour and are refreshed automatically. Refresh tokens rotate on use, and the sync saves the new one. A refresh token expires after about 100 days without use, after which the company must be reconnected. The sync warns 14 days before this happens.
-- Amounts are not currency-converted. All companies are assumed to share one currency.
-- Uses the accrual basis by default.
-- For production, switch `QBO_ENVIRONMENT=production`, use production keys, and move tokens and data to a real database or secret store.
+- Tokens are stored unencrypted in SQLite. A refresh token expires after about 100 days without use,
+  after which the company must be reconnected via `/connect`.
+- Account ids are only unique within one company, so the "All offices" breakdown groups accounts by
+  group + account name.
+- Amounts are not currency converted; all companies are assumed to share one currency. Accrual basis.
+- For production switch `QBO_ENVIRONMENT=production` with production keys, and move tokens to a proper
+  secret store.

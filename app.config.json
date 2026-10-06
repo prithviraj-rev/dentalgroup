@@ -64,6 +64,41 @@
     },
     "showPicker": true
   },
+  "chartOfAccounts": {
+    "$comment": "The Chart of accounts tab: the P&L laid out on the QBO account hierarchy. hideNoActivity/hideInactive are the initial toggle states; expandDepth is how many levels open by default (0 = only account types); balanceSheetToggle offers Asset/Liability/Equity accounts with their current balance.",
+    "enabled": true,
+    "hideNoActivity": true,
+    "hideInactive": true,
+    "expandDepth": 1,
+    "balanceSheetToggle": true,
+    "showSubType": true,
+    "dashboard": {
+      "$comment": "Charts above the chart of accounts table. mix: revenue and expense composition by top-level account (donut | pie | bars), capped at maxSlices with the rest folded into Other. trend: top accounts over time (lines | stacked | small), topAccounts series. subType: expenses/revenue by QBO account sub-type as ranked bars, maxRows rows.",
+      "enabled": true,
+      "mix": {
+        "default": "donut",
+        "options": [
+          "donut",
+          "pie",
+          "bars"
+        ],
+        "maxSlices": 6
+      },
+      "trend": {
+        "default": "lines",
+        "options": [
+          "lines",
+          "stacked",
+          "small"
+        ],
+        "topAccounts": 5
+      },
+      "subType": {
+        "enabled": true,
+        "maxRows": 10
+      }
+    }
+  },
   "metrics": {
     "income": {
       "label": "Income",
@@ -117,7 +152,8 @@
     "startDate": "2025-01-01",
     "endDate": "2026-12-31",
     "accountingMethod": "Accrual",
-    "sequential": true
+    "sequential": true,
+    "includeChartOfAccounts": true
   },
   "qbo": {
     "minorVersion": 75,

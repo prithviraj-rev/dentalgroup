@@ -7,7 +7,13 @@ import KpiCards, { CompareKpis } from './components/KpiCards.jsx';
 import { MainChart, OfficeChart } from './components/charts.jsx';
 import BreakdownTable from './components/BreakdownTable.jsx';
 import OfficeTable from './components/OfficeTable.jsx';
+import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Toast from './components/Toast.jsx';
+
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'coa', label: 'Chart of accounts' },
+];
 
 /** Initial UI state from app.config.json, overridden by anything in the URL. */
 function initialState(config) {
@@ -29,6 +35,7 @@ function initialState(config) {
       office: config.charts.office.options.includes(url.officeChart) ? url.officeChart : config.charts.office.default,
     },
     yoy: url.yoy ?? d.defaultYoy,
+    tab: url.tab === 'coa' && config.chartOfAccounts.enabled ? 'coa' : 'dashboard',
     fromUrl: Boolean(url.from || url.to),
   };
 }
@@ -39,6 +46,7 @@ export default function App() {
   const [meta, setMeta] = useState(null);
   const [filters, setFilters] = useState(null);
   const [chartTypes, setChartTypes] = useState({ main: 'combo', office: 'lines' });
+  const [tab, setTab] = useState('dashboard');
   const [yoy, setYoy] = useState(false);
   const [rangeFromUrl, setRangeFromUrl] = useState(false);
   const [pl, setPl] = useState(null);
@@ -62,6 +70,7 @@ export default function App() {
         setConfig(c);
         setFilters(s.filters);
         setChartTypes(s.chartTypes);
+        setTab(s.tab);
         setYoy(s.yoy);
         setRangeFromUrl(s.fromUrl);
         document.title = c.dashboard.title;
@@ -101,12 +110,13 @@ export default function App() {
   useEffect(() => {
     if (!filters) return;
     writeUrlState({
+      tab: tab !== 'dashboard' ? tab : null,
       office: officeParam, from: filters.from, to: filters.to, granularity: filters.granularity, yoy,
       metric: isCompare ? filters.metric : null,
       mainChart: chartTypes.main !== config.charts.main.default ? chartTypes.main : null,
       officeChart: chartTypes.office !== config.charts.office.default ? chartTypes.office : null,
     });
-  }, [filters, yoy, officeParam, isCompare, chartTypes, config]);
+  }, [filters, yoy, officeParam, isCompare, chartTypes, config, tab]);
 
   const chartOptions = (which) => (config.charts.showPicker ? config.charts[which].options : null);
   const setChartType = (which) => (t) => setChartTypes((c) => ({ ...c, [which]: t }));
@@ -205,18 +215,38 @@ export default function App() {
           </div>
           <a className="text-sm text-accent hover:underline" href={`${API_BASE}/`} target="_blank" rel="noreferrer">Manage connections ↗</a>
         </div>
-        <Controls config={config} offices={offices} filters={filters} onChange={setFilters} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} />
+        {config.chartOfAccounts.enabled && (
+          <nav className="flex gap-1 border-b border-[var(--line)]" role="tablist">
+            {TABS.map((t) => (
+              <button
+                key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === t.id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink2 hover:text-ink'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        )}
+        <Controls config={config} offices={offices} filters={filters} onChange={setFilters} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact={tab === 'coa'} />
       </header>
 
       {error && <ErrorCard error={error} onRetry={() => { setError(null); setReloadKey((k) => k + 1); }} />}
 
-      {!error && isCompare && !compareReady && (
+      {!error && tab === 'coa' && (isCompare && !compareReady ? (
+        <div className="card px-6 py-12 text-center text-sm text-ink2">
+          Pick at least {config.compare.minOffices} offices above, or choose All offices or a single office.
+        </div>
+      ) : (
+        <ChartOfAccounts config={config} filters={filters} officeParam={officeParam} reloadKey={reloadKey} onSync={onSync} syncing={syncing} meta={meta} />
+      ))}
+
+      {!error && tab === 'dashboard' && isCompare && !compareReady && (
         <div className="card px-6 py-12 text-center text-sm text-ink2">
           Pick at least {config.compare.minOffices} offices above to compare them (up to {config.compare.maxOffices}).
         </div>
       )}
 
-      {!error && (!isCompare || compareReady) && loading && !pl && (
+      {!error && tab === 'dashboard' && (!isCompare || compareReady) && loading && !pl && (
         <div className="grid gap-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[0, 1, 2].map((i) => <div key={i} className="card h-24 animate-pulse" />)}
@@ -225,7 +255,7 @@ export default function App() {
         </div>
       )}
 
-      {!error && (!isCompare || compareReady) && pl && !hasData && (
+      {!error && tab === 'dashboard' && (!isCompare || compareReady) && pl && !hasData && (
         <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
           <div className="text-lg font-medium">No data yet, run sync</div>
           {noConnections ? (
@@ -248,7 +278,7 @@ export default function App() {
         </div>
       )}
 
-      {!error && pl && hasData && !isCompare && (
+      {!error && tab === 'dashboard' && pl && hasData && !isCompare && (
         <div className={`grid gap-4 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
           <KpiCards totals={pl.totals} prior={prior?.hasData ? prior.totals : null} yoy={yoy} />
           <MainChart
@@ -266,7 +296,7 @@ export default function App() {
         </div>
       )}
 
-      {!error && pl && hasData && isCompare && compareReady && (
+      {!error && tab === 'dashboard' && pl && hasData && isCompare && compareReady && (
         <div className={`grid gap-4 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
           <CompareKpis offices={pl.offices} priorOffices={prior?.hasData ? prior.offices : null} yoy={yoy} metricKey={filters.metric} colorIndexOf={colorIndexOf} />
           <OfficeChart

@@ -20,5 +20,7 @@ export const api = {
   meta: () => request('/api/meta'),
   pl: (filters) => request(`/api/pl?${qs(filters)}`),
   accounts: (filters) => request(`/api/pl/accounts?${qs(filters)}`),
+  chartOfAccounts: (filters) => request(`/api/accounts?${qs(filters)}`),
+  coa: (filters) => request(`/api/coa?${qs(filters)}`),
   sync: () => request('/sync', { method: 'POST' }),
 };

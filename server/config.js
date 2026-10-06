@@ -31,6 +31,15 @@ const APP_CONFIG_DEFAULTS = {
     office: { default: 'lines', options: ['lines', 'bars', 'stacked', 'small', 'ranked'] },
     showPicker: true,
   },
+  chartOfAccounts: {
+    enabled: true, hideNoActivity: true, hideInactive: true, expandDepth: 1, balanceSheetToggle: true, showSubType: true,
+    dashboard: {
+      enabled: true,
+      mix: { default: 'donut', options: ['donut', 'pie', 'bars'], maxSlices: 6 },
+      trend: { default: 'lines', options: ['lines', 'stacked', 'small'], topAccounts: 5 },
+      subType: { enabled: true, maxRows: 10 },
+    },
+  },
   metrics: {
     income: { label: 'Income', upIsGood: true, color: 1 },
     expenses: { label: 'Expenses', upIsGood: false, color: 2 },
@@ -43,7 +52,7 @@ const APP_CONFIG_DEFAULTS = {
     expenseGroups: ['COGS', 'Expenses', 'OtherExpenses'],
     colors: { Income: 1, COGS: 2, Expenses: 5, OtherIncome: 6, OtherExpenses: 7 }, // palette slots
   },
-  sync: { startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', sequential: true },
+  sync: { startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', sequential: true, includeChartOfAccounts: true },
   qbo: { minorVersion: 75, refreshSkewMinutes: 5, oauthStateTtlMinutes: 10 },
 };
 
@@ -80,14 +89,22 @@ export function loadAppConfig(file = appConfigPath) {
     if (!cfg.metrics[m]) throw new Error(`app.config.json: unknown metric "${m}"`);
   }
   if (!cfg.dashboard.granularities.includes(cfg.dashboard.defaultGranularity)) throw new Error('app.config.json: dashboard.defaultGranularity is not in dashboard.granularities');
-  const CHART_TYPES = { main: ['combo', 'lines', 'bars', 'stacked'], office: ['lines', 'bars', 'stacked', 'small', 'ranked'] };
-  for (const [chart, allowed] of Object.entries(CHART_TYPES)) {
-    const c = cfg.charts[chart];
+  const CHART_TYPES = {
+    'charts.main': [cfg.charts.main, ['combo', 'lines', 'bars', 'stacked']],
+    'charts.office': [cfg.charts.office, ['lines', 'bars', 'stacked', 'small', 'ranked']],
+    'chartOfAccounts.dashboard.mix': [cfg.chartOfAccounts.dashboard.mix, ['donut', 'pie', 'bars']],
+    'chartOfAccounts.dashboard.trend': [cfg.chartOfAccounts.dashboard.trend, ['lines', 'stacked', 'small']],
+  };
+  for (const [path, [c, allowed]] of Object.entries(CHART_TYPES)) {
     if (!Array.isArray(c.options) || c.options.length === 0 || c.options.some((t) => !allowed.includes(t))) {
-      throw new Error(`app.config.json: charts.${chart}.options must be a non-empty list from ${allowed.join(' | ')}`);
+      throw new Error(`app.config.json: ${path}.options must be a non-empty list from ${allowed.join(' | ')}`);
     }
-    if (!c.options.includes(c.default)) throw new Error(`app.config.json: charts.${chart}.default must be one of charts.${chart}.options`);
+    if (!c.options.includes(c.default)) throw new Error(`app.config.json: ${path}.default must be one of ${path}.options`);
   }
+  const mix = cfg.chartOfAccounts.dashboard.mix;
+  if (!Number.isInteger(mix.maxSlices) || mix.maxSlices < 2 || mix.maxSlices > 8) throw new Error('app.config.json: chartOfAccounts.dashboard.mix.maxSlices must be 2..8');
+  const trend = cfg.chartOfAccounts.dashboard.trend;
+  if (!Number.isInteger(trend.topAccounts) || trend.topAccounts < 1 || trend.topAccounts > 8) throw new Error('app.config.json: chartOfAccounts.dashboard.trend.topAccounts must be 1..8');
   for (const g of [...cfg.groups.incomeGroups, ...cfg.groups.expenseGroups]) {
     if (!cfg.groups.order.includes(g)) throw new Error(`app.config.json: group "${g}" is not in groups.order`);
   }

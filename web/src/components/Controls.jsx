@@ -5,7 +5,7 @@ const GRANULARITY_LABELS = { month: 'Monthly', quarter: 'Quarterly', year: 'Year
 
 export const COMPARE = 'compare';
 
-export default function Controls({ config, offices, filters, onChange, yoy, onYoy, onSync, syncing }) {
+export default function Controls({ config, offices, filters, onChange, yoy, onYoy, onSync, syncing, compact = false }) {
   const set = (patch) => onChange({ ...filters, ...patch });
   const { maxOffices, minOffices, metrics } = config.compare;
   const isCompare = filters.office === COMPARE;
@@ -51,7 +51,7 @@ export default function Controls({ config, offices, filters, onChange, yoy, onYo
           </div>
         </div>
 
-        {isCompare && (
+        {isCompare && !compact && (
           <div className="flex flex-col gap-1 text-xs text-ink2">
             Metric
             <div className="seg" role="group" aria-label="Metric">
@@ -64,10 +64,12 @@ export default function Controls({ config, offices, filters, onChange, yoy, onYo
           </div>
         )}
 
+        {!compact && (
         <label className="flex h-9 items-center gap-2 text-sm text-ink2 select-none">
           <input type="checkbox" className="h-4 w-4 accent-[var(--series-1)]" checked={yoy} onChange={(e) => onYoy(e.target.checked)} />
           YoY
         </label>
+        )}
 
         <div className="flex-1" />
 

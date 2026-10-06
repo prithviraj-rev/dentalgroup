@@ -87,6 +87,21 @@ the rotated refresh token is persisted.
   *Ranked totals* (horizontal bars of each office's total over the range, largest first).
 - Chart choices are remembered in the URL (`mainChart`, `officeChart`); the offered forms and the
   defaults are set in `charts` in `app.config.json`, and `charts.showPicker: false` hides the pickers.
+- **Chart of accounts tab:** the P&L laid out on the QuickBooks chart of accounts. Every sync pulls the
+  `Account` entities per company into the `accounts` table; the tab shows Revenue and Expense accounts
+  as a tree (account type → parent account → sub-accounts, with sub-type badges), with per-period
+  amounts from the P&L rolled up into each parent, subtotals per account type and classification, and
+  net income. Toggles: hide accounts with no activity, hide inactive accounts, show balance-sheet
+  accounts (Assets / Liabilities / Equity with their current balance), search, expand / collapse all.
+  With All offices or a comparison selected, same-named accounts are merged across companies and their
+  amounts summed, since QBO account ids are only unique within one company. P&L lines whose account is
+  missing from the chart (deleted accounts) are shown as "not in chart".
+- **Chart of accounts dashboard** (above that table): KPI tiles for revenue, expenses, net income and
+  accounts with activity; a **revenue mix** and an **expense mix** by top-level account, as a donut
+  (default), pie or ranked bars, capped at `maxSlices` with the rest folded into "Other" so slices stay
+  readable; **top accounts over time** for revenue or expenses as lines, stacked bars or small
+  multiples; and **by account sub-type** ranked bars, which uses the QuickBooks detail type set on
+  each account. Each chart has its own form picker, configured under `chartOfAccounts.dashboard`.
 - **Account breakdown:** every account grouped under Income / COGS / Expenses / Other income / Other
   expenses with per-period totals, collapsible groups, group subtotals and a net income row.
 - **Compare offices:** choose `Compare offices…` in the office selector, then tick 2 to 4 offices
@@ -127,6 +142,13 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 | `charts.main`, `charts.office` | `default` form and the `options` offered by each chart's picker (main: combo, lines, bars, stacked; office: lines, bars, stacked, small, ranked). |
 | `charts.showPicker` | `false` hides the pickers and always uses the defaults. |
 | `groups.colors` | Palette slot (1–8) per P&L group, used by the stacked main chart. |
+| `chartOfAccounts.enabled` | Show the Chart of accounts tab. |
+| `chartOfAccounts.hideNoActivity`, `hideInactive`, `expandDepth`, `balanceSheetToggle`, `showSubType` | Initial toggle states, how many tree levels open by default, whether the balance-sheet toggle is offered, and whether sub-type badges are shown. |
+| `chartOfAccounts.dashboard.enabled` | Show the charts above the chart of accounts table. |
+| `chartOfAccounts.dashboard.mix` | `default` and `options` (donut, pie, bars) for the revenue and expense mix, and `maxSlices` (2–8) before folding into Other. |
+| `chartOfAccounts.dashboard.trend` | `default` and `options` (lines, stacked, small) for top accounts over time, and `topAccounts` (1–8). |
+| `chartOfAccounts.dashboard.subType` | `enabled` and `maxRows` for the account sub-type ranking. |
+| `sync.includeChartOfAccounts` | Pull the chart of accounts on every sync (default true). |
 | `metrics.<key>` | Label, `upIsGood` (colors the YoY delta) and palette slot per metric. |
 | `groups.order`, `labels`, `incomeGroups`, `expenseGroups` | P&L groups, their display names and which side of net income they sit on. |
 | `sync.startDate`, `endDate`, `accountingMethod` | Report window and `Accrual` / `Cash`. `.env` values override these. |
@@ -145,6 +167,8 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 | `GET /api/meta` | Synced period range, line count, last sync, connection count. |
 | `GET /api/pl?granularity=month\|quarter\|year&from=YYYY-MM&to=YYYY-MM&office=realmId\|all\|id,id` | `office` may be a comma list of up to `compare.maxOffices` realmIds. Per period: totals per grp, plus `income`, `expenses`, `netIncome`; `rows` as flat `(period, grp, amount)`; `offices[]` with per-office per-period figures and totals. |
 | `GET /api/pl/accounts?…&by=period\|office` | Same filters; per-account totals with one column per period, or per office when `by=office`. |
+| `GET /api/accounts?office=…` | Raw chart of accounts for the office(s): id, name, fully qualified name, type, sub-type, classification, parent, active, current balance. |
+| `GET /api/coa?granularity=…&from=…&to=…&office=…&balanceSheet=0\|1` | The P&L on the chart of accounts: `sections[]` (classification → `types[]` → account tree with `own`, `periods`, `total`, `children`), `netIncome`, counts. |
 | `GET /api/sync/logs` | Last 50 sync log entries. |
 
 ## Data model (SQLite, `data/pnl.db`)
@@ -154,6 +178,9 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
   with `UNIQUE (office_realm_id, account_id, period_start)`. `grp` is one of Income, COGS, Expenses,
   OtherIncome, OtherExpenses. Only account rows are stored, never report summaries, so `SUM()` never
   double counts.
+- `accounts(office_realm_id, account_id, name, fully_qualified_name, account_type, account_sub_type, classification, parent_id, sub_account, active, current_balance, currency, synced_at)`
+  with `PRIMARY KEY (office_realm_id, account_id)`. Replaced per company on every sync from
+  `GET /v3/company/{realmId}/query?query=select * from Account` (paged 1000 at a time).
 - `sync_logs(id, realm_id, company_name, status, row_count, message, start_date, end_date, started_at, finished_at)`
 
 ### How the report is parsed (`server/pnlParser.js`)

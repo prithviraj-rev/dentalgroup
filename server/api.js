@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { appConfig } from './config.js';
 import { isMonth, bucketKey, bucketsFor } from './periods.js';
+import { buildCoaTree } from './coa.js';
 
 const GROUPS = appConfig.groups.order;
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -208,6 +209,52 @@ export function createApiRouter(db) {
       periods: columns, // column descriptors: periods, or offices when by=office
       groups: GROUPS,
       accounts: list,
+    });
+  });
+
+  // Raw chart of accounts for the selected office(s), straight from the `accounts` table.
+  api.get('/accounts', (req, res) => {
+    let f;
+    try { f = parseFilters(req.query); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+    const { offices: selected, params } = f;
+    const where = selected ? `WHERE office_realm_id IN (${selected.map((_, i) => `@o${i}`).join(', ')})` : '';
+    const rows = db.prepare(`
+      SELECT office_realm_id AS realmId, office_name AS officeName, account_id AS id, name, fully_qualified_name AS fullyQualifiedName,
+             account_type AS accountType, account_sub_type AS accountSubType, classification, parent_id AS parentId,
+             sub_account AS subAccount, active, current_balance AS currentBalance, currency, synced_at AS syncedAt
+      FROM accounts ${where} ORDER BY office_name, fully_qualified_name
+    `).all(params);
+    res.json({ office: officeParam(selected), count: rows.length, accounts: rows.map((r) => ({ ...r, subAccount: Boolean(r.subAccount), active: Boolean(r.active) })) });
+  });
+
+  // P&L laid out on the chart of accounts. Same filters as /pl, plus balanceSheet=1 to include
+  // Asset / Liability / Equity accounts (with their current balance, no period amounts).
+  api.get('/coa', (req, res) => {
+    let f;
+    try { f = parseFilters(req.query); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+    const { granularity, from, to, offices: selected, where, params } = f;
+    const includeBalanceSheet = req.query.balanceSheet === '1' || req.query.balanceSheet === 'true';
+    const buckets = bucketsFor(from, to, granularity).map((b) => ({ key: b.key, label: b.label }));
+
+    const officeWhere = selected ? `WHERE office_realm_id IN (${selected.map((_, i) => `@o${i}`).join(', ')})` : '';
+    const accounts = db.prepare(`SELECT * FROM accounts ${officeWhere}`).all(params);
+    const officeCount = db.prepare(`SELECT COUNT(DISTINCT office_realm_id) AS n FROM pl_lines ${where}`).get(params).n;
+    const accountOffices = new Set(accounts.map((a) => a.office_realm_id)).size;
+
+    const lines = db.prepare(`
+      SELECT office_realm_id AS realmId, account_id AS accountId, account_name AS accountName, grp,
+             substr(period_start, 1, 7) AS month, SUM(amount) AS amount
+      FROM pl_lines ${where} GROUP BY office_realm_id, account_id, account_name, grp, month
+    `).all(params).map((l) => ({ ...l, period: bucketKey(l.month, granularity) }));
+
+    const tree = buildCoaTree({ accounts, lines, buckets, merge: Math.max(officeCount, accountOffices) > 1, includeBalanceSheet });
+    res.json({
+      granularity, from, to, office: officeParam(selected), includeBalanceSheet,
+      periods: buckets,
+      merged: Math.max(officeCount, accountOffices) > 1,
+      hasAccounts: accounts.length > 0,
+      hasData: lines.length > 0,
+      ...tree,
     });
   });
 

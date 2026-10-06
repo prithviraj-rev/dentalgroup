@@ -32,6 +32,25 @@ export function openDb(file = config.dbPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_pl_lines_period ON pl_lines (period_start, office_realm_id);
 
+    -- Chart of accounts per company (QBO Account entity), refreshed on every sync.
+    CREATE TABLE IF NOT EXISTS accounts (
+      office_realm_id      TEXT NOT NULL,
+      office_name          TEXT NOT NULL,
+      account_id           TEXT NOT NULL,
+      name                 TEXT NOT NULL,
+      fully_qualified_name TEXT NOT NULL,   -- Parent:Child:Grandchild
+      account_type         TEXT NOT NULL,   -- Income | Cost of Goods Sold | Expense | Other Income | Other Expense | Bank | ...
+      account_sub_type     TEXT,
+      classification       TEXT,            -- Revenue | Expense | Asset | Liability | Equity
+      parent_id            TEXT,
+      sub_account          INTEGER NOT NULL DEFAULT 0,
+      active               INTEGER NOT NULL DEFAULT 1,
+      current_balance      REAL,
+      currency             TEXT,
+      synced_at            TEXT NOT NULL,
+      PRIMARY KEY (office_realm_id, account_id)
+    );
+
     CREATE TABLE IF NOT EXISTS sync_logs (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       realm_id     TEXT NOT NULL,
@@ -73,6 +92,40 @@ export function upsertPlLines(db, realmId, officeName, rows, { startDate, endDat
   });
   tx();
   return rows.length;
+}
+
+/** Replace one company's chart of accounts with the list from QBO (Account entities). */
+export function replaceAccounts(db, realmId, officeName, qboAccounts) {
+  const now = new Date().toISOString();
+  const del = db.prepare('DELETE FROM accounts WHERE office_realm_id = ?');
+  const ins = db.prepare(`
+    INSERT INTO accounts (office_realm_id, office_name, account_id, name, fully_qualified_name, account_type, account_sub_type,
+                          classification, parent_id, sub_account, active, current_balance, currency, synced_at)
+    VALUES (@office_realm_id, @office_name, @account_id, @name, @fully_qualified_name, @account_type, @account_sub_type,
+            @classification, @parent_id, @sub_account, @active, @current_balance, @currency, @synced_at)
+  `);
+  db.transaction(() => {
+    del.run(realmId);
+    for (const a of qboAccounts) {
+      ins.run({
+        office_realm_id: realmId,
+        office_name: officeName,
+        account_id: String(a.Id),
+        name: a.Name,
+        fully_qualified_name: a.FullyQualifiedName || a.Name,
+        account_type: a.AccountType || '',
+        account_sub_type: a.AccountSubType || null,
+        classification: a.Classification || null,
+        parent_id: a.ParentRef?.value != null ? String(a.ParentRef.value) : null,
+        sub_account: a.SubAccount ? 1 : 0,
+        active: a.Active === false ? 0 : 1,
+        current_balance: a.CurrentBalance ?? null,
+        currency: a.CurrencyRef?.value || null,
+        synced_at: now,
+      });
+    }
+  })();
+  return qboAccounts.length;
 }
 
 export function logSync(db, entry) {

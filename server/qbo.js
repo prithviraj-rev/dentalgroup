@@ -113,6 +113,23 @@ export async function getCompanyName(db, realmId) {
   return json.CompanyInfo?.CompanyName || realmId;
 }
 
+/**
+ * Chart of accounts: every Account entity (active and inactive) via the query API, paged 1000 at a time.
+ * https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/account
+ */
+export async function fetchChartOfAccounts(db, realmId, { pageSize = 1000 } = {}) {
+  const out = [];
+  for (let start = 1; ; start += pageSize) {
+    const json = await qboGet(db, realmId, 'query', {
+      query: `select * from Account startposition ${start} maxresults ${pageSize}`,
+    });
+    const rows = json.QueryResponse?.Account || [];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return out;
+}
+
 export async function fetchProfitAndLoss(db, realmId, { startDate, endDate }) {
   return qboGet(db, realmId, 'reports/ProfitAndLoss', {
     start_date: startDate,

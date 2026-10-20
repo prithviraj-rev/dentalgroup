@@ -9,7 +9,8 @@
     "defaultRange": {
       "from": "2025-01",
       "to": "current",
-      "snapToData": true
+      "snapToData": true,
+      "snapMonths": 12
     },
     "defaultYoy": false,
     "granularities": [
@@ -24,22 +25,38 @@
     "syncToastSeconds": {
       "success": 8,
       "error": 12
-    }
+    },
+    "secondaryKpis": [
+      "grossProfit",
+      "operatingExpenses",
+      "grossMargin",
+      "netMargin"
+    ],
+    "$comment": "secondaryKpis: metric keys shown in the second KPI row on the Dashboard tab (any key from \"metrics\"; [] hides the row). defaultTab: tab shown when the dashboard opens (executive | dashboard | analysis | categories | group | cash | budget | practice | coa). defaultRange.snapMonths: on open, show this many months ending at the latest synced month (null = all synced history).",
+    "defaultTab": "executive"
   },
   "compare": {
-    "maxOffices": 4,
+    "maxOffices": null,
     "minOffices": 2,
     "defaultMetric": "netIncome",
     "metrics": [
+      "revenue",
+      "grossProfit",
+      "operatingExpenses",
+      "netOperatingIncome",
       "income",
       "expenses",
-      "netIncome"
-    ]
+      "netIncome",
+      "grossMargin",
+      "netMargin"
+    ],
+    "$comment": "maxOffices: null = no limit on how many offices can be compared. minOffices: how many must be picked. metrics: what the compare view can show (any key from \"metrics\")."
   },
   "officeChart": {
     "enabled": true,
-    "maxOffices": 8,
-    "metric": "netIncome"
+    "maxOffices": null,
+    "metric": "netIncome",
+    "$comment": "Per-office chart on the All offices / category view. maxOffices: null shows every office. Above 8 offices the chart uses small multiples or ranked totals, since only 8 colors stay distinguishable."
   },
   "charts": {
     "$comment": "Chart forms offered by the picker on each chart; default is used on load. main: combo (income/expense bars + net income line) | lines | bars (grouped) | stacked (expense groups stacked, income and net income as lines). office: lines | bars (grouped) | stacked (part-to-whole) | small (one panel per office, shared scale) | ranked (total per office over the range). showPicker=false hides the pickers and uses the defaults.",
@@ -99,21 +116,180 @@
       }
     }
   },
+  "analysis": {
+    "$comment": "The Analysis tab: one office-statement metric broken down by a \"group by\" dimension over time, computed exactly like the Offices tab (raw QuickBooks records, dental practice + sub-DSO as one office, rows and rules from config/offices.json). metrics: a row key from offices.json rows.list, or pct:<row key> for the row as % of net collections (percentOf = the collections row key). dimensions: office | category:<id from the categories file> | row (every cost row of the statement; the metric then only decides amounts vs %) | account (the QuickBooks accounts behind the metric row; subtotals fall back to office). topN: series shown in the lines/bars/stacked charts before the rest fold into Other (max 8, one palette slot each). Small multiples and ranked totals always show every row. The table always lists every row. Needs the Offices tab enabled.",
+    "enabled": true,
+    "defaultMetric": "netCollections",
+    "defaultBy": "office",
+    "percentOf": "netCollections",
+    "metrics": [
+      "netCollections",
+      "providerComp",
+      "staffPayroll",
+      "trainingHiring",
+      "dentalSupplies",
+      "laboratory",
+      "occupancy",
+      "marketing",
+      "otherExpenses",
+      "ebitdaBeforeFees",
+      "managementFees",
+      "officeEbitda",
+      "operatingCashFlow",
+      "pct:providerComp",
+      "pct:staffPayroll",
+      "pct:dentalSupplies",
+      "pct:laboratory",
+      "pct:occupancy",
+      "pct:marketing",
+      "pct:otherExpenses",
+      "pct:ebitdaBeforeFees",
+      "pct:managementFees",
+      "pct:officeEbitda"
+    ],
+    "dimensions": [
+      "office",
+      "category:group",
+      "category:brand",
+      "row",
+      "account"
+    ],
+    "dimensionLabels": {
+      "office": "Office",
+      "row": "Statement row",
+      "account": "QuickBooks account"
+    },
+    "topN": 8,
+    "chart": {
+      "default": "lines",
+      "options": [
+        "lines",
+        "bars",
+        "stacked",
+        "small",
+        "ranked"
+      ]
+    }
+  },
+  "officeCategories": {
+    "$comment": "Office categories for filtering, comparing and grouping. Defined in the file below; restart after editing.",
+    "file": "config/dashboard-categories.json"
+  },
   "metrics": {
+    "$comment": "Every metric the dashboard can show. formula: sum of P&L groups with a sign (+1 / -1). ratio: numerator / denominator of two other metrics, shown as a percentage. income, expenses and netIncome without a formula use groups.incomeGroups / groups.expenseGroups. color: palette slot 1-8. upIsGood colors YoY changes.",
     "income": {
       "label": "Income",
       "upIsGood": true,
-      "color": 1
+      "color": 1,
+      "description": "Income + other income"
     },
     "expenses": {
       "label": "Expenses",
       "upIsGood": false,
-      "color": 2
+      "color": 2,
+      "description": "COGS + expenses + other expenses"
     },
     "netIncome": {
       "label": "Net income",
       "upIsGood": true,
-      "color": 3
+      "color": 3,
+      "description": "Income minus expenses"
+    },
+    "revenue": {
+      "label": "Revenue",
+      "upIsGood": true,
+      "color": 1,
+      "formula": {
+        "Income": 1
+      },
+      "description": "Operating income accounts only"
+    },
+    "cogs": {
+      "label": "Cost of goods sold",
+      "upIsGood": false,
+      "color": 4,
+      "formula": {
+        "COGS": 1
+      }
+    },
+    "grossProfit": {
+      "label": "Gross profit",
+      "upIsGood": true,
+      "color": 6,
+      "formula": {
+        "Income": 1,
+        "COGS": -1
+      }
+    },
+    "operatingExpenses": {
+      "label": "Operating expenses",
+      "upIsGood": false,
+      "color": 5,
+      "formula": {
+        "Expenses": 1
+      }
+    },
+    "netOperatingIncome": {
+      "label": "Net operating income",
+      "upIsGood": true,
+      "color": 7,
+      "formula": {
+        "Income": 1,
+        "COGS": -1,
+        "Expenses": -1
+      }
+    },
+    "otherIncome": {
+      "label": "Other income",
+      "upIsGood": true,
+      "color": 6,
+      "formula": {
+        "OtherIncome": 1
+      }
+    },
+    "otherExpenses": {
+      "label": "Other expenses",
+      "upIsGood": false,
+      "color": 8,
+      "formula": {
+        "OtherExpenses": 1
+      }
+    },
+    "grossMargin": {
+      "label": "Gross margin",
+      "upIsGood": true,
+      "color": 6,
+      "ratio": {
+        "numerator": "grossProfit",
+        "denominator": "revenue"
+      }
+    },
+    "operatingMargin": {
+      "label": "Operating margin",
+      "upIsGood": true,
+      "color": 7,
+      "ratio": {
+        "numerator": "netOperatingIncome",
+        "denominator": "revenue"
+      }
+    },
+    "netMargin": {
+      "label": "Net margin",
+      "upIsGood": true,
+      "color": 3,
+      "ratio": {
+        "numerator": "netIncome",
+        "denominator": "income"
+      }
+    },
+    "opexRatio": {
+      "label": "Operating expenses % of revenue",
+      "upIsGood": false,
+      "color": 5,
+      "ratio": {
+        "numerator": "operatingExpenses",
+        "denominator": "revenue"
+      }
     }
   },
   "groups": {
@@ -149,15 +325,64 @@
     }
   },
   "sync": {
-    "startDate": "2025-01-01",
+    "startDate": "2024-01-01",
     "endDate": "2026-12-31",
     "accountingMethod": "Accrual",
     "sequential": true,
-    "includeChartOfAccounts": true
+    "includeChartOfAccounts": true,
+    "schedule": {
+      "$comment": "Daily pull from QuickBooks: every connected company is synced at time (24-hour) in timezone. catchUpOnStart: if the last successful sync is older than maxAgeHours when the server starts, sync 30 s after start. Set enabled=false (or env SYNC_SCHEDULE=off) to turn it off. The server must stay running for this to fire.",
+      "enabled": true,
+      "time": "03:00",
+      "timezone": "America/Chicago",
+      "catchUpOnStart": true,
+      "maxAgeHours": 26
+    }
   },
   "qbo": {
     "minorVersion": 75,
     "refreshSkewMinutes": 5,
     "oauthStateTtlMinutes": 10
+  },
+  "categoryView": {
+    "$comment": "Category compare tab: offices (or office categories) side by side on account categories and category groups, with targets. Categories, groups, targets and defaults are in the file below; it is separate from the Executive config.",
+    "enabled": true,
+    "file": "config/category-view.json"
+  },
+  "rawSync": {
+    "$comment": "Raw QuickBooks records (invoices, bills, payments, journal entries, ...) pulled on every sync for the newer tabs. Entities and refresh settings in the file below.",
+    "file": "config/raw-sync.json"
+  },
+  "groupOverview": {
+    "$comment": "Group overview tab: segment P&Ls, intercompany eliminations, EBITDA, forecast, office scorecard and alerts. Rules in the file below.",
+    "enabled": true,
+    "file": "config/group-overview.json"
+  },
+  "finance": {
+    "$comment": "Cash & balance sheet tab (balances, cash flow, A/R and A/P aging, vendor spend), computed from the raw QuickBooks records. Settings in the file below. The Budget and Practice KPIs tabs were removed from the dashboard; their APIs (/api/finance/budget, /api/practice-kpis) are still served.",
+    "enabled": true,
+    "file": "config/finance.json"
+  },
+  "offices": {
+    "$comment": "Offices tab: each dental practice and its sub-DSO read as ONE office, with the office statement (net collections, provider and staff payroll, supplies, lab, occupancy, marketing, other, EBITDA before and after DSO management fees, operating cash flow), combined P&L, balance sheet and trends, all from the raw QuickBooks records. Pairing, row rules and flags in the file below.",
+    "enabled": true,
+    "file": "config/offices.json"
+  },
+  "officesSheet": {
+    "$comment": "Second Offices tab: the same page with the row rules taken literally from the client's Financial KPI sheet (column E account numbers). file extends config/offices.json; apiPath is the URL segment under /api (office-view is the first tab); label is the tab name.",
+    "enabled": true,
+    "file": "config/offices-sheet.json",
+    "apiPath": "office-sheet",
+    "label": "Offices (client sheet)"
+  },
+  "practiceKpis": {
+    "$comment": "Practice KPIs tab: production, collections, visits, new patients ... imported from the practice-management system (CSV upload or POST /api/practice-kpis) and combined with the P&L. Metrics and column matching in the file below.",
+    "enabled": true,
+    "file": "config/practice-kpis.json"
+  },
+  "executive": {
+    "$comment": "Executive tab (visual summary). Sections, KPIs, cost categories and payer groups are in the file below.",
+    "enabled": true,
+    "file": "config/executive.json"
   }
 }

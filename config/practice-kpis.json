@@ -1,0 +1,36 @@
+{
+  "$comment": "Practice KPIs tab: operational numbers from the practice-management system (Dentrix, Eaglesoft, Open Dental, Curve, ...) imported per office and month, combined with the QuickBooks P&L. Import a CSV on the tab or POST JSON to /api/practice-kpis. Each CSV needs an office column (QuickBooks company name or id, or a name listed in officeAliases), a month column (YYYY-MM or a date) and any of the metric columns; headers are matched case-insensitively against key, label and aliases. Restart the server after editing.",
+  "officeColumn": ["office", "practice", "location", "company", "clinic"],
+  "monthColumn": ["month", "period", "date"],
+  "officeAliases": {
+    "$comment": "Name used in the practice-management export -> QuickBooks company name or id, when they differ."
+  },
+  "$metrics": "aggregate: sum (default) adds months together; last takes the latest month (for counts like active patients).",
+  "metrics": [
+    { "key": "production", "label": "Gross production", "format": "money", "aliases": ["gross production", "total production", "prod"] },
+    { "key": "adjustments", "label": "Adjustments", "format": "money", "aliases": ["write offs", "writeoffs", "ppo adjustments"] },
+    { "key": "collections", "label": "Collections", "format": "money", "aliases": ["total collections", "payments", "receipts"] },
+    { "key": "doctorProduction", "label": "Doctor production", "format": "money", "aliases": ["dr production", "dentist production"] },
+    { "key": "hygieneProduction", "label": "Hygiene production", "format": "money", "aliases": ["hyg production", "hygienist production"] },
+    { "key": "patientVisits", "label": "Patient visits", "format": "count", "aliases": ["visits", "appointments completed", "patients seen"] },
+    { "key": "newPatients", "label": "New patients", "format": "count", "aliases": ["new pts", "np"] },
+    { "key": "activePatients", "label": "Active patients", "format": "count", "aggregate": "last", "aliases": ["active pts"] },
+    { "key": "doctorDays", "label": "Doctor days", "format": "count", "aliases": ["provider days", "dr days"] },
+    { "key": "hygieneDays", "label": "Hygiene days", "format": "count", "aliases": ["hyg days"] },
+    { "key": "treatmentPresented", "label": "Treatment presented", "format": "money", "aliases": ["tx presented"] },
+    { "key": "treatmentAccepted", "label": "Treatment accepted", "format": "money", "aliases": ["tx accepted", "case acceptance $"] }
+  ],
+  "derived": [
+    { "key": "netProduction", "label": "Net production", "format": "money", "formula": { "production": 1, "adjustments": -1 } },
+    { "key": "collectionRate", "label": "Collection rate", "format": "percent", "ratio": ["collections", "netProduction"], "target": { "min": 98 } },
+    { "key": "hygienePct", "label": "Hygiene % of production", "format": "percent", "ratio": ["hygieneProduction", "production"], "target": { "min": 30 } },
+    { "key": "productionPerVisit", "label": "Production per visit", "format": "money", "ratio": ["production", "patientVisits"] },
+    { "key": "productionPerDoctorDay", "label": "Production per doctor day", "format": "money", "ratio": ["doctorProduction", "doctorDays"] },
+    { "key": "caseAcceptance", "label": "Case acceptance", "format": "percent", "ratio": ["treatmentAccepted", "treatmentPresented"], "target": { "min": 60 } },
+    { "key": "costPerVisit", "label": "Cost per visit", "format": "money", "ratio": ["pl:expenses", "patientVisits"] },
+    { "key": "expensesPctCollections", "label": "Expenses % of collections", "format": "percent", "ratio": ["pl:expenses", "collections"], "target": { "max": 85 } },
+    { "key": "ebitdaPctCollections", "label": "EBITDA % of collections", "format": "percent", "ratio": ["pl:ebitda", "collections"], "target": { "min": 15 } }
+  ],
+  "tiles": ["collections", "collectionRate", "newPatients", "productionPerVisit", "expensesPctCollections", "ebitdaPctCollections"],
+  "table": ["production", "collections", "collectionRate", "hygienePct", "patientVisits", "newPatients", "productionPerVisit", "caseAcceptance", "expensesPctCollections", "ebitdaPctCollections"]
+}

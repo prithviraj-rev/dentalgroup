@@ -9,22 +9,26 @@
   },
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "platform"
   ],
   "scripts": {
-    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev": "concurrently -k -n server,web,platform -c blue,magenta,green \"npm run dev -w server\" \"npm run dev -w web\" \"npm run dev -w platform\"",
     "server": "npm run dev -w server",
     "web": "npm run dev -w web",
     "sync": "curl -s -X POST http://localhost:3000/sync",
     "sync:node": "node scripts/sync.js",
-    "build": "npm run build -w web",
+    "build": "npm run build -w web && npm run build -w platform",
     "test": "node --test test/",
     "start": "cross-env NODE_ENV=production SERVE_WEB=1 node server/index.js",
     "start:plain": "node server/index.js",
-    "preview": "npm run build && npm start"
+    "preview": "npm run build && npm start",
+    "platform": "npm run dev -w platform",
+    "ui-smoke": "node scripts/ui-smoke/run.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "jsdom": "^24.1.3"
   }
 }

@@ -102,13 +102,12 @@ the rotated refresh token is persisted.
   readable; **top accounts over time** for revenue or expenses as lines, stacked bars or small
   multiples; and **by account sub-type** ranked bars, which uses the QuickBooks detail type set on
   each account. Each chart has its own form picker, configured under `chartOfAccounts.dashboard`.
-- **Account breakdown:** every account grouped under Income / COGS / Expenses / Other income / Other
-  expenses with per-period totals, collapsible groups, group subtotals and a net income row.
 - **Compare offices:** choose `Compare offices…` in the office selector, then tick 2 to 4 offices
   (`compare.maxOffices`). Pick a metric (income, expenses or net income) and you get one tile per office
-  with YoY, one line per office on the chart, an office × period table with a combined row, and the
-  account breakdown with one column per office. Office colors are fixed per office, so they stay the
-  same whichever subset you pick.
+  with YoY, one line per office on the chart and an office × period table with a combined row. Office
+  colors are fixed per office, so they stay the same whichever subset you pick. (The per-account
+  breakdown table was removed from this tab: the Chart of accounts tab shows the accounts as a tree and
+  the Offices tab shows the accounts behind each statement row. `GET /api/pl/accounts` is still served.)
 - The view is mirrored into the URL (`?office=id,id&from=…&to=…&granularity=…&metric=…&yoy=1`), so a
   comparison can be bookmarked or shared.
 - Light and dark mode follow the OS setting.
@@ -206,6 +205,190 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 | `npm run build` | Production build of the dashboard into `web/dist`. |
 | `npm start` | Production mode: one server on :3000 serving the API and `web/dist`, with basic auth when `APP_USER`/`APP_PASSWORD` are set. |
 | `npm run preview` | `build` then `start`. |
+
+## Executive view
+
+The default tab of the dashboard (`dashboard.defaultTab`). One call, `GET /api/executive?from=&to=&office=`,
+returns the selected range and the same range a year earlier. Sections, in order (`config/executive.json`
+→ `sections`):
+
+| Section | What it shows |
+|---|---|
+| KPIs | Revenue, operating expenses, net income, net margin with 12-month sparklines and YoY; key cost categories as % of revenue |
+| Trend | Revenue by month vs the same month last year; net income by month (profit / loss) with a rolling average |
+| Office leaderboard | Every office with revenue bar, YoY, net income, diverging margin bar and a monthly sparkline; sortable, click to open the office |
+| Revenue vs net margin | Scatter of offices: size of business vs profitability, group margin as a reference line |
+| Heatmap | Net margin per office per month (blue profit, red loss) |
+| Payer mix | Medicaid / insurance / patient payments / financing for the group (donut) and per office (100% bars) |
+| Cost structure | "Where each revenue dollar goes" bar, and each cost category as % of revenue for every office |
+| Profit bridge | Waterfall from revenue through each cost category to net income |
+| What changed | Accounts that moved net income the most vs last year, helped and hurt |
+
+Cost categories and payer groups are rule lists in `config/executive.json` (regular expressions on account
+names and QuickBooks detail types, first match wins). The dashboard opens on the trailing
+`dashboard.defaultRange.snapMonths` (12) months of synced data, and sync history starts at
+`sync.startDate` (2024-01-01) so year-over-year comparisons have a full prior year.
+
+## Analysis, metrics and office categories
+
+- **Analysis tab** (dashboard): the same figures as the Offices tab, over time. Pick a metric (an office
+  statement row: Net collections, Provider compensation, …, Office EBITDA, Operating cash flow, or a row as
+  % of net collections) and a **Group by**: office (dental practice + sub-DSO as one), an office category,
+  statement row (every cost row at once) or the QuickBooks accounts behind the row. Chart as lines, grouped
+  bars, stacked bars, small multiples or ranked totals (top `analysis.topN` series, the rest folded into
+  "Other"), plus a full table with per-period values, totals and share. Computed from the raw QuickBooks
+  records with the rules of `config/offices.json` (pairs, internal charges, payroll split); options in
+  `app.config.json` `analysis.*`, metric keys validated against the statement rows at startup. Needs the
+  Offices tab enabled. API: `GET /api/analysis?by=…&metric=…` with the same filters as `/api/pl`
+  (`/api/breakdown`, the older P&L-report breakdown, is still served but no tab uses it).
+- **Metrics** (`metrics` in `app.config.json`): sums of P&L groups with a sign (`formula`) or ratios of two
+  other metrics (`ratio`, shown as %). Shipped: income, expenses, net income, revenue, COGS, gross profit,
+  operating expenses, net operating income, other income, other expenses, gross / operating / net margin,
+  operating expenses % of revenue. Every metric is available in compare mode (`compare.metrics`), the
+  Analysis tab (`analysis.metrics`) and the second KPI row on the Dashboard (`dashboard.secondaryKpis`).
+- **Office categories** (`config/dashboard-categories.json`): dimensions that assign each office to a
+  category, either by rules (name pattern or explicit office list) or from the entity groups set on the
+  Ledgerview Entities page. Categories appear in the office picker (combined figures for that category),
+  as "Add a category" in compare mode, and as a Group by in Analysis. `GET /api/office-categories`.
+- **No comparison limit:** `compare.maxOffices: null`. With more than 8 offices the office chart switches
+  to small multiples or ranked totals, since the palette has 8 distinguishable colors.
+
+## Category compare tab
+
+Compares offices side by side on **categories of accounts** instead of single accounts. Separate from the other
+tabs: its own endpoint (`GET /api/category-view`, same filters and office scoping as `/api/pl`), its own config
+(`config/category-view.json`) and its own code (`server/categoryView.js`, `web/src/categoryMath.js`,
+`web/src/components/CategoryCompare.jsx`). Editing it never changes the Dashboard, Executive or Analysis tabs.
+
+- **Club by** categories (Provider compensation, Staff payroll, Lab fees, Dental supplies, Occupancy, ...) or
+  category groups (Personnel, Clinical, Facility, Sales & admin, Financing & owners). Revenue view shows payer sources.
+- **Show** % of revenue (common-size P&L, the standard way to compare offices of different size), amount, or monthly average.
+- **Compare** offices, or office categories combined (Brand, Company type from `config/dashboard-categories.json`);
+  **Group rows by** adds subtotal rows.
+- Benchmark matrix shaded against the **peer median** or the **target** per category (`targetPct` in the config;
+  the defaults are commonly cited dental ranges, replace them with your own). Categories an office does not book
+  show as blank and stay out of the median.
+- Click a column to sort and chart it (ranked bars with median + target, trend for the ticked rows); click a cell
+  for the QuickBooks accounts behind it; Export CSV.
+
+### Daily QuickBooks pull
+
+`sync.schedule` in `app.config.json` runs the same sync as **Sync now** every day at `time` in `timezone`
+(default 03:00 America/Chicago) and catches up on start if the last successful sync is older than `maxAgeHours`.
+Turn it off with `enabled: false` or env `SYNC_SCHEDULE=off`. It runs inside the server process, so the host must
+keep the service running (Railway does by default; do not enable app sleeping).
+
+## Group overview, Cash & balance sheet, Offices (client sheet)
+
+More tabs, each with its own config file and endpoint (`server/finance/`, `server/offices/`), separate from the P&L tabs.
+
+**Group overview** (`GET /api/group-overview`, `config/group-overview.json`)
+- P&L by segment (the Company type groups from the Entities page), **consolidated** or as reported.
+- **Intercompany eliminations**: each rule names the receiving accounts (income side) and the paying accounts
+  (expense side), optionally limited to segments. Only the amount found on both sides is eliminated, month by month,
+  so consolidated net income never moves; the unmatched rest is listed in the reconciliation table with the accounts
+  behind it. QuickBooks P&L lines do not carry the counterparty, so the rules are account-name based: check the
+  reconciliation and narrow the rules if a side matches outside payments (e.g. rent to outside landlords).
+- **EBITDA** (net income + D&A, interest and taxes matched by `ebitda.addBack`), trailing twelve months,
+  **full-year outlook** (last year's seasonality scaled by this year's trend, else recent run rate).
+- **Office scorecard** (revenue, like-for-like growth, margins, EBITDA, cost targets met) and **alerts** (cost spikes
+  vs an office's own recent months, revenue drops vs last year, loss streaks, costs over target).
+
+**Cash & balance sheet** (`GET /api/finance/cash`, `config/finance.json`)
+- Cash, working capital, current ratio, debt, A/R and A/P, runway; cash and debt trend; cash by company; monthly
+  cash flow (operating / investing / financing); profit vs cash conversion; A/R and A/P aging with the most overdue
+  parties; top vendors across companies; balance sheet by company.
+
+**Budget** and **Practice KPIs** are no longer tabs in the dashboard (removed 2026-10-20: no QuickBooks budgets
+and no practice-system import for this client). Their APIs still exist: `GET /api/finance/budget` (budget vs actual
+from QuickBooks budgets) and `GET/POST /api/practice-kpis` (`config/practice-kpis.json`, CSV / JSON import of
+production, collections, visits, new patients, combined with the P&L).
+
+**Offices (client sheet)** (`GET /api/office-sheet…`, `config/offices-sheet.json`, `app.config.json` `officesSheet`)
+- The same page as the Offices tab, served by the same code with another row config: every statement row holds
+  exactly the account numbers of column E of the client's Financial KPI sheet, matched at the start of the account
+  name or of any level of its path (402, 503.1 / 504 / 506.3 / 576 / 506.2, 503, 505 / 517, 521, 536, 559, 507,
+  540.1 for Small Equipment Lease, 650), no payroll-tax split, loan payments added to operating cash flow. Accounts
+  the sheet does not assign (500, 501, 502, 586, 560, …) land in Other Expenses; income accounts outside 402 go to
+  the memo line "Income not assigned to a row". The config `extends` `config/offices.json` for everything else
+  (pairing, internal charges, flags, periods). Combined offices are shared between the two tabs.
+
+**Offices** (`GET /api/office-view`, `GET /api/office-view/:key`, `config/offices.json`, `server/offices/`)
+- Each dental practice and its sub-DSO are read as **one office** (income lands in the dental company, expenses in
+  the sub-DSO). Pairs are listed explicitly (QuickBooks realm ids, with city/state/name overrides) or found
+  automatically: every company in the configured office categories becomes an office, and a company whose name
+  matches `autoPair.subDsoPattern` joins the office at the same QuickBooks city and state. Names follow
+  `naming.pattern` (`Dental Office - {city}`).
+- **Internal charges** between the two companies (management charge, staffing, profit sent across) are removed from
+  both sides month by month, only as far as the two sides match. The rest follows `internal.<side>.unmatched`:
+  `memo` (default for income) takes it out of the statement and lists it under "Not in the rows above", since
+  a sub-DSO's management or staffing income is not patient collections; `rows` (default for expense) leaves it in
+  the rows as booked. A line counts when its payee / customer is the partner company (names compared
+  loosely, plus per-office `aliases`) or its account matches `internal.expense` / `internal.income`.
+- **Portfolio**: period (month, last full quarter, YTD, TTM) ending at the *To* month, totals, needs-attention
+  flags (net loss, collections down, uncategorized, low cash, AR high, books behind, stale pull, internal charges
+  unmatched, pull failed; thresholds in `flags`), sortable office table, CSV export.
+- **Combined profit and loss** (one office, below the statement): the companies' full P&L as booked in QuickBooks,
+  accounts merged by section, type and account path (sub-accounts merge only under the same parent), with Gross
+  profit, Net operating income, Net other income and Net income, one column per month or per company (toggle),
+  CSV export. No internal-charge removal and no payroll split, so every line ties to QuickBooks. The trends add
+  revenue and net income by month as booked. Combining companies opens the combined office straight away.
+- **One office**: the office statement by month with Period and Prior-year columns, rows from `rows.list` in
+  order (Net collections, Provider compensation, Staff payroll, Provider training & hiring, Dental supplies incl.
+  dental equipment maintenance, Laboratory, Rent / occupancy, Marketing, Other expenses, Office EBITDA before
+  management fees, DSO management fees, Office EBITDA, Operating cash flow), each expandable to the main QuickBooks
+  accounts behind it, shown at the level the row's rule matched (504 Hygienist, 503.1 Dental Contract Labor;
+  deeper sub-accounts roll up into it; `statement.rollUpSubAccounts`: "matched" | true = main account | false). Payroll taxes,
+  benefits and bonuses are split across the rows in `payrollTaxes.allocateTo` in proportion. Depreciation /
+  amortization / interest, other (non-operating) income and profit transfers (`profitTransfers`, the "fake"
+  management fees) are memo lines, never in EBITDA. Balance sheet at the as-of month end and a year earlier (both
+  companies merged by account path, cumulative net income in equity) and 24-month trends of collections, EBITDA and
+  cash. Picking a single company in the header opens its office.
+- **Combine companies** (button on the tab, roles that may manage data): tick the companies that are one practice, give the
+  office a name, save. Saved offices live in the database (table office_groups, POST/DELETE /api/office-view/setup), override
+  the config pairs, and a company can be in one saved office only. Remove one to fall back to the automatic pairing.
+
+**Raw QuickBooks data** (`server/raw/`, `config/raw-sync.json`): the newer tabs (Category compare, Offices, Group overview,
+Cash & balance sheet, Budget, Practice KPIs) are built only from raw records pulled through the QuickBooks Accounting
+API: Accounts, Customers, Vendors, Items, Classes, Locations, Invoices, Sales receipts, Payments, Credit memos,
+Refunds, Deposits, Bills, Bill payments, Purchases, Vendor credits, Journal entries, Transfers, Budgets, tax rates
+and agencies. Each record is stored unmodified in `qbo_raw`. The first sync of a company pulls its full history; later
+syncs pull only what changed (`cdc` endpoint), with a full re-pull every `fullRefreshDays`. After each pull the
+company's double-entry **ledger** (`ledger` table, debit positive) is rebuilt from the records; P&L, balances, cash
+flow (direct method), aging (open invoices / bills by due date), vendor spend, budgets and the transaction drill-down
+all sum from it. Every tab shows how many raw records it is built from and how many balance sheet account balances
+match the CurrentBalance QuickBooks returns on each Account (`GET /api/raw/status` per company). Not available from
+the API, so not in these tabs: QuickBooks Payroll paychecks (payroll booked by journal entry is included), inventory
+cost-of-goods postings and US sales tax payments. The existing tabs keep using the P&L report sync and are unaffected.
+
+## Multi-client platform (`/app`)
+
+A multi-tenant shell around the P&L dashboard: organizations (clients), their entities and entity groups,
+users with roles and per-entity access, sync history, activity log and settings, plus a platform-admin
+view across all organizations. The existing dashboard is embedded unchanged under **Reports**.
+
+- **URLs:** `/app` (sign in), `/platform-api/*` (JSON API). The dashboard stays at `/`.
+- **Code:** `server/platform/` (API, sessions, storage in `pf_*` tables of the same SQLite file) and
+  `platform/` (React + Vite + Tailwind web app). `npm run dev` now also starts it on http://localhost:5174/app.
+- **Sign-in:** email and password, signed session cookie (`SESSION_SECRET` env var). In demo mode the
+  login page lists every sample account; the password is `auth.demoPassword`.
+- **Live vs sample:** entities with an `externalId` (a connected QuickBooks realm) use real synced data and
+  the real sync; all others show generated figures marked "Sample data". Only organizations with
+  `liveDashboard: true` get the embedded dashboard, since it shows that client's real books, and a
+  platform session opens it without the basic-auth prompt.
+
+### Configuration files (`config/`)
+
+| File | Holds |
+|---|---|
+| `platform.config.json` | Branding, auth/demo settings, the permission list, roles and the permissions each grants, sidebar navigation (enable/disable modules, permission per item), entity and organization statuses, connectors, plans and their limits, industries, currencies, time zones, sync schedules, brand colors, org defaults, overview window, sync simulation, reports embed, sample-data settings. |
+| `platform.seed.json` | Sample platform admins, organizations, groups, entities (live or sample with revenue and margin) and users with roles and entity access. Loaded into an empty database on startup. |
+
+Both are validated at startup with errors that name the bad key (unknown permission on a role, a default
+plan that does not exist, a seed user pointing at a missing entity, …). Add a role by adding it to `roles`
+with a permission list; hide a module by setting its navigation item to `enabled: false`. To reload the
+seed, delete the `pf_*` tables (or point `DB_PATH` at a new file). `PLATFORM_CONFIG_DIR` and
+`PLATFORM_NAME` env vars override the folder and product name.
 
 ## Hosting it online
 

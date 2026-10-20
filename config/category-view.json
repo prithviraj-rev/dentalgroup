@@ -1,0 +1,69 @@
+{
+  "$comment": "Category compare tab: how QuickBooks accounts are clubbed into categories, how categories roll up into category groups, and the targets each office is measured against. Rules are checked in order and the first match wins: 'accounts' is a case-insensitive regular expression tested on the account name first, then on its full QuickBooks path (Parent:Child); 'subTypes' lists QuickBooks detail types. Anything unmatched goes to 'other'. Targets are % of revenue (targetPct.max for costs, targetPct.min for anything that should stay above a level). The default targets are commonly cited dental-practice ranges: replace them with your own. color: palette slot 1-8 used in the expense-mix chart (categories without a color fold into 'All other' there). This file is separate from config/executive.json, so editing it never changes the Executive tab. Restart the server after editing.",
+  "defaults": {
+    "$comment": "Initial state of the tab. view: expense | revenue. level: category | group. measure: pctRevenue | amount | monthlyAvg. compareBy: office | <office category dimension id from config/dashboard-categories.json>. groupRowsBy: none | <dimension id> (adds subtotal rows when comparing offices). shade: median | target. trendSeries: rows preselected for the trend chart (largest by revenue, max 8).",
+    "view": "expense",
+    "level": "category",
+    "measure": "pctRevenue",
+    "compareBy": "office",
+    "groupRowsBy": "none",
+    "shade": "median",
+    "trendSeries": 5
+  },
+  "shading": {
+    "$comment": "Matrix cell color in % of revenue mode: deviation from the median (or target) relative to it. Full color at clampRelative (0.5 = 50% above or below). Blue = favorable, red = unfavorable.",
+    "clampRelative": 0.5
+  },
+  "denominator": "revenue",
+  "groups": [
+    { "label": "Personnel", "color": 1 },
+    { "label": "Clinical", "color": 2 },
+    { "label": "Facility", "color": 4 },
+    { "label": "Sales & admin", "color": 7 },
+    { "label": "Financing & owners", "color": 5 },
+    { "label": "Other", "color": null }
+  ],
+  "groupTargets": {
+    "Personnel": { "targetPct": { "max": 55 } },
+    "Clinical": { "targetPct": { "max": 14 } },
+    "Facility": { "targetPct": { "max": 8 } }
+  },
+  "expense": {
+    "other": { "label": "Other expenses", "group": "Other" },
+    "categories": [
+      { "label": "Management fees & distributions", "group": "Financing & owners", "accounts": "management (profit|fee|charge)|partner profit|k-1|overhead charge|pass thru|^650." },
+      { "label": "Payroll taxes & benefits", "group": "Personnel", "color": 5, "accounts": "payroll tax|benefit|401 ?k|health ins|workers comp", "targetPct": { "max": 6 } },
+      { "label": "Provider compensation", "group": "Personnel", "color": 1, "accounts": "doctor|associate dentist|^dentist|hygien|provider", "targetPct": { "max": 30 } },
+      { "label": "Staff payroll", "group": "Personnel", "color": 7, "accounts": "staff|assistant|payroll|bonus|wage|salar|front desk|office manager", "subTypes": ["PayrollExpenses", "PayrollWageExpenses"], "targetPct": { "max": 25 } },
+      { "label": "Lab fees", "group": "Clinical", "color": 3, "accounts": "\\blab", "targetPct": { "max": 8 } },
+      { "label": "Dental supplies", "group": "Clinical", "color": 2, "accounts": "dental suppl|supplies & materials|clinical suppl", "subTypes": ["SuppliesMaterials", "SuppliesMaterialsCogs"], "targetPct": { "max": 6 } },
+      { "label": "Occupancy", "group": "Facility", "color": 4, "accounts": "rent|lease|electric|utilit|repair|maintenance|janitor|cleaning|water|gas|cam\\b", "subTypes": ["RentOrLeaseOfBuildings", "Utilities", "RepairMaintenance"], "targetPct": { "max": 7 } },
+      { "label": "Marketing", "group": "Sales & admin", "color": 6, "accounts": "advertis|marketing|promot", "subTypes": ["AdvertisingPromotional"], "targetPct": { "max": 5 } },
+      { "label": "Professional fees", "group": "Sales & admin", "accounts": "legal|professional|consult|accounting", "subTypes": ["LegalProfessionalFees"], "targetPct": { "max": 3 } },
+      { "label": "Software & office", "group": "Sales & admin", "accounts": "software|office suppl|computer|subscription|telephone|internet|postage|recruit", "targetPct": { "max": 3 } },
+      { "label": "Insurance", "group": "Sales & admin", "accounts": "insurance", "subTypes": ["Insurance"] },
+      { "label": "Construction & contractors", "group": "Other", "accounts": "construction|subcontract|contractor", "subTypes": ["CostOfLabor", "CostOfLaborCos"] },
+      { "label": "Depreciation & amortization", "group": "Financing & owners", "accounts": "depreciation|amortization", "subTypes": ["Amortization"] },
+      { "label": "Interest & bank fees", "group": "Financing & owners", "accounts": "interest|bank charge|merchant fee|loan", "subTypes": ["InterestPaid", "BankCharges"] },
+      { "label": "Taxes", "group": "Financing & owners", "accounts": "tax", "subTypes": ["TaxesPaid"] },
+      { "label": "Cost of goods sold", "group": "Other", "accounts": "cost of goods sold" },
+      { "label": "Uncategorized expense", "group": "Other", "accounts": "uncategorized" }
+    ]
+  },
+  "revenue": {
+    "$comment": "Applied to the Income group (operating revenue). The Other income group is always its own category, labelled otherIncome.",
+    "other": { "label": "Other revenue" },
+    "otherIncome": "Other income",
+    "categories": [
+      { "label": "Medicaid", "accounts": "medicaid" },
+      { "label": "Insurance", "accounts": "insurance" },
+      { "label": "Patient payments", "accounts": "cash|patient check|bankcard|card|merch|patient pay" },
+      { "label": "Patient financing", "accounts": "financing|care ?credit" },
+      { "label": "Rental income", "accounts": "rent" },
+      { "label": "Construction services", "accounts": "construction" },
+      { "label": "Refunds", "accounts": "refund" },
+      { "label": "Product & other sales", "accounts": "^sales$|product sales" },
+      { "label": "Uncategorized income", "accounts": "uncategorized" }
+    ]
+  }
+}

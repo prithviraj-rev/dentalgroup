@@ -1,0 +1,23 @@
+{
+  "$comment": "Office categories for the P&L dashboard. Each dimension assigns every office to one category; the dashboard can filter to a category, compare categories and group the Analysis tab by them. type 'rules': the first rule that matches wins; match is a case-insensitive regular expression on the office name, offices lists exact office names or QuickBooks company IDs. type 'platformGroups': uses the entity groups set on the Entities page in Ledgerview. Offices with no match go to otherLabel. Restart the server after editing.",
+  "dimensions": [
+    {
+      "id": "brand",
+      "label": "Brand",
+      "type": "rules",
+      "rules": [
+        {
+          "category": "Admire Dental",
+          "match": "^Admire Dental"
+        }
+      ],
+      "otherLabel": "Other practices"
+    },
+    {
+      "id": "group",
+      "label": "Company type",
+      "type": "platformGroups",
+      "otherLabel": "Not grouped yet"
+    }
+  ]
+}

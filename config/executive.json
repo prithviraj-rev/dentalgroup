@@ -1,0 +1,198 @@
+{
+  "$comment": "Executive view: sections, KPIs and how accounts are grouped into cost categories and payer (revenue) groups. Rules are checked in order and the first match wins: 'accounts' is a case-insensitive regular expression on the QuickBooks account name, 'subTypes' lists QuickBooks detail types. Anything unmatched goes to the 'other' bucket. Restart the server after editing.",
+  "sections": [
+    "kpis",
+    "trend",
+    "leaderboard",
+    "scatter",
+    "heatmap",
+    "revenueMix",
+    "costStructure",
+    "bridge",
+    "movers"
+  ],
+  "kpis": {
+    "$comment": "metrics: keys from app.config.json metrics. bucketShares: cost categories shown as % of revenue.",
+    "metrics": [
+      "revenue",
+      "operatingExpenses",
+      "netIncome",
+      "netMargin"
+    ],
+    "bucketShares": [
+      "Provider compensation",
+      "Staff payroll",
+      "Dental supplies",
+      "Lab fees"
+    ]
+  },
+  "trend": {
+    "rollingMonths": 3
+  },
+  "leaderboard": {
+    "defaultSort": "revenue",
+    "sparkMetric": "netIncome"
+  },
+  "scatter": {
+    "labelTop": 6
+  },
+  "heatmap": {
+    "metric": "netMargin",
+    "clampPercent": 30
+  },
+  "movers": {
+    "count": 8
+  },
+  "costBuckets": {
+    "$comment": "Applied to expense accounts (COGS, Expenses, Other expenses).",
+    "other": "Other expenses",
+    "rules": [
+      {
+        "bucket": "Management fees & distributions",
+        "accounts": "management (profit|fee|charge)|partner profit|k-1|overhead charge|pass thru|^650."
+      },
+      {
+        "bucket": "Payroll taxes & benefits",
+        "accounts": "payroll tax|benefit|401 ?k|health ins|workers comp"
+      },
+      {
+        "bucket": "Provider compensation",
+        "accounts": "doctor|associate dentist|^dentist|hygien|provider"
+      },
+      {
+        "bucket": "Staff payroll",
+        "accounts": "staff|assistant|payroll|bonus|wage|salar|front desk|office manager",
+        "subTypes": [
+          "PayrollExpenses",
+          "PayrollWageExpenses"
+        ]
+      },
+      {
+        "bucket": "Lab fees",
+        "accounts": "\\blab"
+      },
+      {
+        "bucket": "Dental supplies",
+        "accounts": "dental suppl|supplies & materials|clinical suppl",
+        "subTypes": [
+          "SuppliesMaterials",
+          "SuppliesMaterialsCogs"
+        ]
+      },
+      {
+        "bucket": "Occupancy",
+        "accounts": "rent|lease|electric|utilit|repair|maintenance|janitor|cleaning|water|gas|cam\\b",
+        "subTypes": [
+          "RentOrLeaseOfBuildings",
+          "Utilities",
+          "RepairMaintenance"
+        ]
+      },
+      {
+        "bucket": "Marketing",
+        "accounts": "advertis|marketing|promot",
+        "subTypes": [
+          "AdvertisingPromotional"
+        ]
+      },
+      {
+        "bucket": "Professional fees",
+        "accounts": "legal|professional|consult|accounting",
+        "subTypes": [
+          "LegalProfessionalFees"
+        ]
+      },
+      {
+        "bucket": "Software & office",
+        "accounts": "software|office suppl|computer|subscription|telephone|internet|postage|recruit"
+      },
+      {
+        "bucket": "Construction & contractors",
+        "accounts": "construction|subcontract|contractor",
+        "subTypes": [
+          "CostOfLabor",
+          "CostOfLaborCos"
+        ]
+      },
+      {
+        "bucket": "Depreciation & amortization",
+        "accounts": "depreciation|amortization",
+        "subTypes": [
+          "Amortization"
+        ]
+      },
+      {
+        "bucket": "Interest & bank fees",
+        "accounts": "interest|bank charge|merchant fee|loan",
+        "subTypes": [
+          "InterestPaid",
+          "BankCharges"
+        ]
+      },
+      {
+        "bucket": "Insurance",
+        "accounts": "insurance",
+        "subTypes": [
+          "Insurance"
+        ]
+      },
+      {
+        "bucket": "Taxes",
+        "accounts": "tax",
+        "subTypes": [
+          "TaxesPaid"
+        ]
+      },
+      {
+        "bucket": "Cost of goods sold",
+        "accounts": "cost of goods sold"
+      },
+      {
+        "bucket": "Uncategorized",
+        "accounts": "uncategorized"
+      }
+    ]
+  },
+  "revenueMix": {
+    "$comment": "Applied to income accounts (the Income group; other income is shown separately).",
+    "other": "Other revenue",
+    "rules": [
+      {
+        "bucket": "Medicaid",
+        "accounts": "medicaid"
+      },
+      {
+        "bucket": "Insurance",
+        "accounts": "insurance"
+      },
+      {
+        "bucket": "Patient payments",
+        "accounts": "cash|patient check|bankcard|card|merch|patient pay"
+      },
+      {
+        "bucket": "Patient financing",
+        "accounts": "financing|care ?credit"
+      },
+      {
+        "bucket": "Rental income",
+        "accounts": "rent"
+      },
+      {
+        "bucket": "Construction services",
+        "accounts": "construction"
+      },
+      {
+        "bucket": "Refunds",
+        "accounts": "refund"
+      },
+      {
+        "bucket": "Product & other sales",
+        "accounts": "^sales$|product sales"
+      },
+      {
+        "bucket": "Uncategorized",
+        "accounts": "uncategorized"
+      }
+    ]
+  }
+}

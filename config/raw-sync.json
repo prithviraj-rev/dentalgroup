@@ -1,0 +1,13 @@
+{
+  "$comment": "Raw QuickBooks data for the newer tabs (Category compare, Group overview, Cash & balance sheet, Budget, Practice KPIs). Every record of these entities is pulled from the QuickBooks Accounting API and stored as-is in qbo_raw; the dashboards are computed from a ledger built out of those records. The first sync of a company pulls full history; later syncs pull only what changed (change data capture), with a full re-pull every fullRefreshDays to be safe. The existing tabs are not affected. Restart the server after editing.",
+  "enabled": true,
+  "entities": [
+    "Account", "Customer", "Vendor", "Employee", "Item", "Class", "Department",
+    "Invoice", "SalesReceipt", "Payment", "CreditMemo", "RefundReceipt", "Deposit",
+    "Bill", "BillPayment", "Purchase", "VendorCredit", "JournalEntry", "Transfer",
+    "Budget", "TaxAgency", "TaxRate"
+  ],
+  "pageSize": 1000,
+  "cdc": true,
+  "fullRefreshDays": 7
+}

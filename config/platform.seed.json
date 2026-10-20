@@ -1,0 +1,111 @@
+{
+  "$comment": "Sample records loaded into an empty platform database (sampleData.seedOnStartup). Entities with externalId are 'live': linked to a QuickBooks company already connected on this server, so their figures are real. Others get generated figures from annualRevenue and margin. User entities: \"all\" or a list of entity names. daysAgo backdates creation.",
+
+  "platformAdmins": [
+    { "name": "Platform Admin", "email": "admin@ledgerview.demo" }
+  ],
+
+  "organizations": [
+    {
+      "name": "Dental Group",
+      "industry": "Dental",
+      "plan": "pro",
+      "status": "active",
+      "brandColor": "#2a78d6",
+      "liveDashboard": true,
+      "daysAgo": 45,
+      "groups": ["Parent company", "Subsidiaries"],
+      "entities": [
+        { "name": "IES Sandbox Company US 8496 Parent", "group": "Parent company", "connector": "quickbooks", "status": "connected", "externalId": "9341458165037635" },
+        { "name": "IES Sandbox Company US 8496 Child 1", "group": "Subsidiaries", "connector": "quickbooks", "status": "connected", "externalId": "9341458164894727" },
+        { "name": "Riverside Dental", "group": "Subsidiaries", "connector": "quickbooks", "status": "pending" }
+      ],
+      "users": [
+        { "name": "Dana Whitfield", "email": "owner@dentalgroup.demo", "role": "org_admin", "entities": "all" },
+        { "name": "Marcus Lee", "email": "finance@dentalgroup.demo", "role": "finance", "entities": "all" },
+        { "name": "Priya Nair", "email": "parent.manager@dentalgroup.demo", "role": "member", "entities": ["IES Sandbox Company US 8496 Parent"] }
+      ]
+    },
+    {
+      "name": "BrightSmile Orthodontics",
+      "industry": "Orthodontics",
+      "plan": "standard",
+      "status": "active",
+      "brandColor": "#1baf7a",
+      "daysAgo": 120,
+      "groups": ["North", "South"],
+      "entities": [
+        { "name": "BrightSmile Downtown", "group": "North", "status": "connected", "annualRevenue": 2400000, "margin": 0.18 },
+        { "name": "BrightSmile Lakeview", "group": "North", "status": "connected", "annualRevenue": 1600000, "margin": 0.14 },
+        { "name": "BrightSmile Mesa", "group": "South", "status": "connected", "annualRevenue": 1900000, "margin": 0.16 },
+        { "name": "BrightSmile Coral Bay", "group": "South", "status": "needs_reconnect", "annualRevenue": 1100000, "margin": 0.07 }
+      ],
+      "users": [
+        { "name": "Elena Ruiz", "email": "admin@brightsmile.demo", "role": "org_admin", "entities": "all" },
+        { "name": "Tom Becker", "email": "north.lead@brightsmile.demo", "role": "member", "entities": ["BrightSmile Downtown", "BrightSmile Lakeview"] },
+        { "name": "Aisha Khan", "email": "south.lead@brightsmile.demo", "role": "member", "entities": ["BrightSmile Mesa", "BrightSmile Coral Bay"] },
+        { "name": "Jon Park", "email": "jon.park@brightsmile.demo", "role": "member", "entities": ["BrightSmile Downtown"], "status": "invited" }
+      ]
+    },
+    {
+      "name": "Summit Physical Therapy",
+      "industry": "Healthcare",
+      "plan": "pro",
+      "status": "active",
+      "brandColor": "#4a3aa7",
+      "daysAgo": 200,
+      "groups": ["Mountain", "Pacific", "Midwest"],
+      "entities": [
+        { "name": "Summit PT Denver", "group": "Mountain", "status": "connected", "annualRevenue": 3100000, "margin": 0.21 },
+        { "name": "Summit PT Boulder", "group": "Mountain", "status": "connected", "annualRevenue": 1800000, "margin": 0.17 },
+        { "name": "Summit PT Portland", "group": "Pacific", "status": "connected", "annualRevenue": 2200000, "margin": 0.15 },
+        { "name": "Summit PT Tacoma", "group": "Pacific", "status": "error", "annualRevenue": 1300000, "margin": 0.11 },
+        { "name": "Summit PT Madison", "group": "Midwest", "status": "connected", "annualRevenue": 1500000, "margin": 0.13 },
+        { "name": "Summit PT Omaha", "group": "Midwest", "status": "connected", "annualRevenue": 950000, "margin": -0.03 }
+      ],
+      "users": [
+        { "name": "Grace Holloway", "email": "admin@summitpt.demo", "role": "org_admin", "entities": "all" },
+        { "name": "Victor Osei", "email": "controller@summitpt.demo", "role": "finance", "entities": "all" },
+        { "name": "Lena Brandt", "email": "mountain@summitpt.demo", "role": "member", "entities": ["Summit PT Denver", "Summit PT Boulder"] },
+        { "name": "Sam Ortiz", "email": "pacific@summitpt.demo", "role": "member", "entities": ["Summit PT Portland", "Summit PT Tacoma"] }
+      ]
+    },
+    {
+      "name": "Northwind Coffee Co.",
+      "industry": "Food & beverage",
+      "plan": "standard",
+      "status": "active",
+      "brandColor": "#eb6834",
+      "daysAgo": 90,
+      "groups": ["Seattle", "Portland"],
+      "entities": [
+        { "name": "Northwind Capitol Hill", "group": "Seattle", "status": "connected", "annualRevenue": 820000, "margin": 0.12 },
+        { "name": "Northwind Ballard", "group": "Seattle", "status": "connected", "annualRevenue": 640000, "margin": 0.09 },
+        { "name": "Northwind Fremont", "group": "Seattle", "status": "needs_reconnect", "annualRevenue": 510000, "margin": 0.06 },
+        { "name": "Northwind Pearl District", "group": "Portland", "status": "connected", "annualRevenue": 700000, "margin": 0.1 },
+        { "name": "Northwind Alberta St", "group": "Portland", "status": "connected", "annualRevenue": 450000, "margin": 0.04 }
+      ],
+      "users": [
+        { "name": "Hannah Cole", "email": "admin@northwind.demo", "role": "org_admin", "entities": "all" },
+        { "name": "Ravi Menon", "email": "seattle@northwind.demo", "role": "member", "entities": ["Northwind Capitol Hill", "Northwind Ballard", "Northwind Fremont"] }
+      ]
+    },
+    {
+      "name": "Harbor Veterinary Partners",
+      "industry": "Veterinary",
+      "plan": "trial",
+      "status": "trial",
+      "brandColor": "#e87ba4",
+      "daysAgo": 6,
+      "groups": ["Coastal"],
+      "entities": [
+        { "name": "Harbor Vet Bayside", "group": "Coastal", "status": "connected", "annualRevenue": 1250000, "margin": 0.14 },
+        { "name": "Harbor Vet Point Loma", "group": "Coastal", "status": "connected", "annualRevenue": 980000, "margin": 0.12 },
+        { "name": "Harbor Vet Del Mar", "group": "Coastal", "status": "pending" }
+      ],
+      "users": [
+        { "name": "Owen Fitzgerald", "email": "admin@harborvet.demo", "role": "org_admin", "entities": "all" }
+      ]
+    }
+  ]
+}

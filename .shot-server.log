@@ -1,0 +1,7 @@
+  ! SESSION_SECRET not set - platform sessions reset when the server restarts
+  ! APP_USER / APP_PASSWORD not set - the hosted dashboard is open to anyone with the URL
+QBO server on http://localhost:3999 (sandbox, serving web/dist)
+  Connect a company:  http://localhost:3999/connect
+  Connections page:   http://localhost:3999/connections
+  Dashboard:          http://localhost:3999
+  Daily QuickBooks sync at 03:00 America/Chicago (next 2026-10-21T08:00:00.000Z)

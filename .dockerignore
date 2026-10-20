@@ -5,3 +5,4 @@ data
 .env
 .git
 dashboard
+platform/dist

@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
+COPY platform/package.json platform/
 RUN npm ci
 COPY . .
 RUN npm run build
@@ -15,9 +16,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
+COPY platform/package.json platform/
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/server ./server
 COPY --from=build /app/web/dist ./web/dist
+COPY --from=build /app/platform/dist ./platform/dist
+COPY config ./config
 COPY app.config.json ./
 # /data is where the host mounts its persistent volume (Railway/Fly). No VOLUME instruction: Railway rejects it.
 RUN mkdir -p /data

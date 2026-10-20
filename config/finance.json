@@ -1,0 +1,26 @@
+{
+  "$comment": "Cash & balance sheet tab and Budget tab settings. The figures come from the raw QuickBooks records (config/raw-sync.json). Restart the server after editing.",
+  "cash": {
+    "$comment": "debt: balance sheet subsections and account-name pattern (case-insensitive) counted as debt. runwayMonths: months of operating cash flow averaged for the runway estimate.",
+    "debtSubsections": [
+      "CreditCards",
+      "LongTermLiabilities"
+    ],
+    "debtAccounts": "loan|note payable|notes payable|line of credit|mortgage|sba|equipment financing",
+    "runwayMonths": 3
+  },
+  "aging": {
+    "$comment": "topParties: customers / vendors listed in the overdue tables. overdueFrom: first bucket counted as overdue.",
+    "topParties": 15,
+    "overdueFrom": "31-60"
+  },
+  "vendors": {
+    "$comment": "top: vendors in the group-wide spend table. exclude: vendor names (regex) left out, e.g. payroll services or owners.",
+    "top": 20,
+    "exclude": ""
+  },
+  "budget": {
+    "$comment": "Budgets come from QuickBooks (Budgeting in QBO Plus/Advanced). When a company has several active P&L budgets for the same months, the one whose name matches preferName (regex) wins, otherwise the newest.",
+    "preferName": ""
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$comment": "Group overview tab: segments, intercompany eliminations, EBITDA, forecast, alerts and the office scorecard. Restart the server after editing.",
+  "segments": {
+    "$comment": "dimension: office category dimension (config/dashboard-categories.json) whose categories are the segments, e.g. the Company type groups set on the Entities page.",
+    "dimension": "group"
+  },
+  "intercompany": {
+    "$comment": "Amounts companies in the group charge each other (management fees, rent to the group's own real estate companies). QuickBooks P&L lines do not say who the other party is, so each rule names the accounts on both sides: income = the receiving company's accounts, expense = the paying company's. segments limits a side to companies in those segments ([] = any company). accounts is a case-insensitive regex on the account name or its full path. Consolidated figures remove both sides; any difference between them is shown so it can be fixed in the books.",
+    "rules": [
+      {
+        "label": "Management fees",
+        "income": { "segments": [], "accounts": "management (fee|fees|income|revenue)|admin(istrative)? fee income|overhead (charge|allocation) income" },
+        "expense": { "segments": [], "accounts": "management (fee|fees|profit|charge)|overhead charge|pass thru" }
+      },
+      {
+        "label": "Rent to group real estate",
+        "income": { "segments": ["Dental RE (Y)"], "accounts": "rent|lease" },
+        "expense": { "segments": ["Dental Companies"], "accounts": "^rent|rent expense|lease expense|building lease" }
+      }
+    ]
+  },
+  "ebitda": {
+    "$comment": "EBITDA = net income + these expense accounts added back (interest, taxes, depreciation, amortization). Regex on account name or full path, expense groups only.",
+    "addBack": "depreciation|amortization|interest (expense|paid)|loan interest|mortgage interest|income tax|franchise tax"
+  },
+  "forecast": {
+    "$comment": "Full-year outlook for the year of the To month. seasonal: remaining months follow last year's shape scaled by this year's run vs last year (falls back to runRate when last year is missing). runRate: average of the last runRateMonths months.",
+    "method": "seasonal",
+    "runRateMonths": 3,
+    "fiscalYearStartMonth": 1
+  },
+  "alerts": {
+    "$comment": "Flags in the Group overview. spikePts: a cost category's share of revenue in the latest month is this many percentage points above its trailing-average (trailingMonths). minSharePct: ignore categories below this share. revenueDropPct: latest month revenue down this much vs the same month last year. lossStreakMonths: consecutive loss-making months. overTarget: flag categories above their target in config/category-view.json over the selected range.",
+    "spikePts": 3,
+    "trailingMonths": 3,
+    "minSharePct": 2,
+    "revenueDropPct": 15,
+    "lossStreakMonths": 3,
+    "overTarget": true,
+    "max": 40
+  },
+  "scorecard": {
+    "$comment": "Office scorecard columns and default sort. Keys: revenue | revenueGrowth | netMargin | ebitda | ebitdaMargin | targetsMet.",
+    "columns": ["revenue", "revenueGrowth", "netMargin", "ebitda", "ebitdaMargin", "targetsMet"],
+    "defaultSort": "ebitdaMargin"
+  }
+}

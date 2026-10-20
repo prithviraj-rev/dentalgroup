@@ -1,0 +1,85 @@
+{
+  "$comment": "Offices tab: each dental practice and its sub-DSO are read as ONE office (income lands in the dental company, expenses in the sub-DSO). Every figure comes from the ledger built out of raw QuickBooks records (config/raw-sync.json); existing tabs are not affected. Restart the server after editing.",
+  "naming": {
+    "$comment": "Office names. pattern placeholders: {city} {state} {company} (the first company's QuickBooks name). Companies without a city in QuickBooks use fallback.",
+    "pattern": "Dental Office - {city}",
+    "fallback": "{company}"
+  },
+  "offices": {
+    "$comment": "Explicit offices: companies (QuickBooks realm ids, see Manage connections) that are combined into one office. Use this when the pairing cannot be read from QuickBooks addresses (e.g. a company registered at the head-office address). city/state/name are optional and override what QuickBooks says.",
+    "list": [
+      { "city": "Bakersfield", "state": "CA", "companies": ["9341457660339052", "9341453395454539"] },
+      { "city": "Branford", "state": "CT", "companies": ["123146197916154", "9341455987426720"], "aliases": ["CT Branford"] },
+      { "city": "Fall River", "state": "MA", "companies": ["193514800786499", "9341455292964176"] },
+      { "city": "Indianapolis", "state": "IN", "companies": ["9341455292331247", "9341455292509414"] }
+    ]
+  },
+  "autoPair": {
+    "$comment": "Companies not listed above. Every company in these office categories (config/dashboard-categories.json dimension + category labels) becomes an office. A company whose name matches subDsoPattern is attached to the office at the same QuickBooks city and state, or becomes its own office when there is none (standaloneSubDso).",
+    "enabled": true,
+    "dimension": "group",
+    "categories": ["Dental Companies"],
+    "subDsoPattern": "sub ?dso",
+    "standaloneSubDso": true
+  },
+  "internal": {
+    "$comment": "Money moving between the companies of one office (management charge, staffing, profit sent across). It is removed from both sides, month by month, only as far as the two sides match (min of expense side and income side). unmatched: what happens to the rest. memo = it leaves the statement and is listed under 'Not in the rows above' (income: not patient collections; expense: not a cost of the office). rows = it stays in the rows as booked. A ledger line is a candidate when its payee/customer is another company of the same office (names compared loosely; add aliases on the office for other spellings) or its account matches these patterns (case-insensitive, account name or full path).",
+    "expense": { "accounts": "^management expenses|sub ?dso", "unmatched": "rows" },
+    "income": { "accounts": "management income|staffing income|uncategori[sz]ed income|non operation income|^income$", "unmatched": "memo" }
+  },
+  "rows": {
+    "$comment": "The office statement, in order. role: collections = all operating income (Income section, refunds already netted); cost = operating cost rows matched in order by accounts (first match wins, account name then full path); other = everything operating not matched by a cost row; feesSubtotal = collections minus cost/other rows; fees = DSO management fees; ebitda = feesSubtotal minus fees; cashFlow = operating cash flow (every bank movement whose other side is operating, both companies).",
+    "list": [
+      { "key": "netCollections", "label": "Net Collections", "role": "collections" },
+      { "key": "providerComp", "label": "Provider Compensation", "role": "cost", "accounts": "doctor|associate dentist|^dentist|dentist$|hygien|provider", "$comment": "Dentist compensation, hygienists; bonuses, payroll taxes and benefits are added in proportion (payrollTaxes below)." },
+      { "key": "staffPayroll", "label": "Staff Payroll", "role": "cost", "accounts": "staff(?! training| licen)|dental assistant|temp agency|contract labor|payroll expense|wages?|salar|overtime|laundry|uniform", "$comment": "Non-provider wages and overtime; their share of payroll taxes and benefits is added (payrollTaxes below). 'Staff Training' and 'Staff License' (517.x) are training, not payroll." },
+      { "key": "trainingHiring", "label": "Provider Training & Hiring", "role": "cost", "accounts": "recruit|training|continuing ed|\\bce\\b|hiring" },
+      { "key": "dentalSupplies", "label": "Dental Supplies", "role": "cost", "accounts": "dental suppl|supplies & labs|implant(?! lab)|emergency suppl|clinical suppl|dental equipment (repair|maint)|maintenance:[\\d.]* ?dental$", "$comment": "Dental materials and consumables plus dental equipment maintenance (560.1 Dental under Repairs & Maintenance). 536.4 Implant Lab is a lab fee." },
+      { "key": "laboratory", "label": "Laboratory", "role": "cost", "accounts": "\\blabs?\\b|laborator" },
+      { "key": "occupancy", "label": "Rent / Occupancy", "role": "cost", "accounts": "\\brent\\b|nnn|common area|electric|\\bgas\\b|water|trash|utilit|repair|maintenance|cleaning|janitor|alarm|waste", "$comment": "Rent, utilities, CAM/NNN and facility repairs." },
+      { "key": "marketing", "label": "Marketing", "role": "cost", "accounts": "advertis|marketing|promot" },
+      { "key": "otherExpenses", "label": "Other Expenses", "role": "other" },
+      { "key": "ebitdaBeforeFees", "label": "Office EBITDA before Management Fees", "role": "feesSubtotal" },
+      { "key": "managementFees", "label": "DSO Management Fees", "role": "fees", "accounts": "^650|management fees?$|^management fee:|corporation overhead|direct charge|pass thru|other management charges" },
+      { "key": "officeEbitda", "label": "Office EBITDA", "role": "ebitda" },
+      { "key": "operatingCashFlow", "label": "Operating Cash Flow", "role": "cashFlow" }
+    ]
+  },
+  "statement": {
+    "$comment": "rollUpSubAccounts: which account the lines behind a statement row are shown under. \"matched\" = the level of the QuickBooks path the row's rule matched (503.1 Dental Contract Labor, 504 Hygienist, 576 Payroll Tax Expense), deeper sub-accounts rolled into it; true = the main account only (402 Income, 5000 Total Payroll Expenses), so a parent split across rows shows the same name in each; false = every sub-account.",
+    "rollUpSubAccounts": "matched"
+  },
+  "payrollTaxes": {
+    "$comment": "Payroll taxes, benefits and bonuses are split across these rows in proportion to their amounts each month (all to the last row when both are zero).",
+    "accounts": "payroll tax|employee benefit|health insurance|401 ?k|bonus|payroll service",
+    "allocateTo": ["providerComp", "staffPayroll"]
+  },
+  "notOperating": {
+    "$comment": "Left out of every row and of EBITDA; shown as memo lines under the statement.",
+    "accounts": "depreciation|amortization|interest|income tax|franchise tax"
+  },
+  "profitTransfers": {
+    "$comment": "Profit moved to another company and booked as an expense (the 'fake' management fees). Not a cost of the office: shown as a memo line, never in EBITDA.",
+    "accounts": "^802|management profit|k-1|partner profit|partners? share|distribution"
+  },
+  "uncategorized": {
+    "$comment": "Accounts counted as uncategorized for the Uncategorized flag.",
+    "accounts": "uncategori[sz]ed"
+  },
+  "periods": {
+    "$comment": "Period options for the KPI cards and the Period column. default: month | quarter | ytd | ttm. fiscalYearStartMonth for YTD. asOf: lastFullMonth = when the To month is the current (unfinished) month, the KPI cards, balances and Month column use the month before it; toMonth = always the To month.",
+    "default": "month",
+    "asOf": "lastFullMonth",
+    "fiscalYearStartMonth": 1
+  },
+  "flags": {
+    "$comment": "Needs-attention flags. collectionsDownPct: period collections down this much vs prior year. uncategorizedPct: uncategorized income+expense above this % of collections. lowCashMonths: cash below this many months of operating costs. arHighMonths: receivables above this many months of collections. staleDays: last raw pull older than this. internalUnmatchedPct: unmatched internal charges above this % of collections.",
+    "collectionsDownPct": 10,
+    "uncategorizedPct": 2,
+    "lowCashMonths": 1,
+    "arHighMonths": 2,
+    "staleDays": 3,
+    "internalUnmatchedPct": 5
+  },
+  "trendMonths": 24
+}

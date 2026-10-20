@@ -1,0 +1,31 @@
+{
+  "$comment": "Second Offices tab, 'Offices (client sheet)': the same page as the Offices tab, but every statement row holds exactly the QuickBooks account numbers the client wrote in column E of the Financial KPI sheet (docs/Sabuska DashBoard.xlsx). Everything not listed there (pairing, internal charges, flags, periods) is inherited from the file in extends. Account numbers are matched at the start of the account name or of any level of its full path, so 521 also catches 521.1 and 521 Dental Supplies:521.2. Accounts the sheet does not assign land in Other Expenses (expand the row to see them). Restart the server after editing.",
+  "extends": "config/offices.json",
+  "rows": {
+    "list": [
+      { "key": "netCollections", "label": "Net Collections", "role": "collections", "accounts": "(^|:)40[12](\\s|$|:|\\.)", "$comment": "Sheet: 402 (401 refunds netted). Other income-type accounts (405 Uncategorized Income, Sales, ...) are not collections and go to the memo line 'Income not assigned to a row'." },
+      { "key": "providerComp", "label": "Provider Compensation", "role": "cost", "accounts": "(^|:)(503\\.1|504|506\\.3|576|506\\.2)(\\s|$|:)", "$comment": "Sheet: Dentist 503.1, Hygienists 504, Bonus 506.3, Payroll Taxes 576, 401K 506.2. Whole amounts, no proportional split. 500 Doctor's payroll and 501 Associate Dentist are NOT in the sheet and therefore fall into Other Expenses." },
+      { "key": "staffPayroll", "label": "Staff Payroll", "role": "cost", "accounts": "(^|:)503(\\s|$|:)", "$comment": "Sheet: 503.0 = the 503 accounts (503 Staff Payroll, 503 Contract Labor and its 503.2 / 503.3 sub-accounts; 503.1 is taken by Provider Compensation first). 502 Dental Assistant is not in the sheet." },
+      { "key": "trainingHiring", "label": "Provider Training & Hiring", "role": "cost", "accounts": "(^|:)(505|517)(\\s|$|:|\\.)", "$comment": "Sheet: Recruitment 505, Training & Education 517." },
+      { "key": "dentalSupplies", "label": "Dental Supplies", "role": "cost", "accounts": "(^|:)521(\\s|$|:|\\.)", "$comment": "Sheet: 521. Dental equipment repairs (560.1) stay with 560 in Other Expenses, as column E puts Repairs 560 there." },
+      { "key": "laboratory", "label": "Laboratory", "role": "cost", "accounts": "(^|:)536(\\s|$|:|\\.)", "$comment": "Sheet: 536." },
+      { "key": "occupancy", "label": "Rent / Occupancy", "role": "cost", "accounts": "(^|:)559(\\s|$|:|\\.)", "$comment": "Sheet: 559 only. Utilities (586) and repairs (560) are not assigned to this row in column E." },
+      { "key": "marketing", "label": "Marketing", "role": "cost", "accounts": "(^|:)507(\\s|$|:|\\.)", "$comment": "Sheet: 507." },
+      { "key": "smallEquipmentLease", "label": "Small Equipment Lease", "role": "cost", "accounts": "(^|:)540\\.1(\\s|$|:)", "$comment": "ASSUMPTION: the sheet lists this row with no account. 540.1 Small Dental Equipment (under 540 Equipment Lease Expense) is the only matching account in the books. Set accounts to a pattern that matches nothing to leave the row empty." },
+      { "key": "otherExpenses", "label": "Other Expenses (incl. accounts the sheet does not assign)", "role": "other", "$comment": "Sheet: Repairs 560, Office Exp 554.1, Fees 512, Insurance 530, Legal & Professional 542, Website & IT 570, plus every operating account no row above claims (500, 501, 502, 506.1, 506.4, 516, 524, 540.2, 544, 545, 555, 584, 585, 586, ...)." },
+      { "key": "ebitdaBeforeFees", "label": "Office EBITDA before Management Fees", "role": "feesSubtotal" },
+      { "key": "managementFees", "label": "DSO Management Fees", "role": "fees", "accounts": "(^|:)650(\\s|$|:|\\.)", "$comment": "Sheet: 650." },
+      { "key": "officeEbitda", "label": "Office EBITDA", "role": "ebitda" },
+      { "key": "operatingCashFlow", "label": "Operating Cash Flow (incl. loan payments)", "role": "cashFlow" }
+    ]
+  },
+  "payrollTaxes": {
+    "$comment": "Sheet column E puts payroll taxes (576), bonus (506.3) and 401K (506.2) wholly into Provider Compensation, so nothing is split here.",
+    "accounts": "",
+    "allocateTo": []
+  },
+  "cashFlow": {
+    "$comment": "Sheet C18: operating cash flow 'should also take into consideration the loan repayments'. true adds loan principal movements (borrowings and repayments on long-term liabilities and debt accounts) to the operating cash flow row.",
+    "includeLoanPayments": true
+  }
+}

@@ -1,0 +1,350 @@
+{
+  "$comment": "Multi-client platform configuration. The server validates this file at startup and serves the non-secret parts to the web app at GET /platform-api/config. Restart the server after editing. Secrets (SESSION_SECRET, Intuit keys) stay in environment variables.",
+  "platform": {
+    "$comment": "Product branding shown on the login page, sidebar and browser tab. PLATFORM_NAME env var overrides name.",
+    "name": "Ledgerview",
+    "tagline": "Financial reporting across every entity you manage",
+    "logoText": "LV",
+    "supportEmail": "support@ledgerview.demo",
+    "primaryColor": "#2a78d6"
+  },
+  "auth": {
+    "$comment": "demoMode seeds every sample user with demoPassword and lists demo accounts on the login page. Turn both off before real clients use it.",
+    "sessionDays": 7,
+    "minPasswordLength": 8,
+    "demoMode": true,
+    "demoPassword": "demo1234",
+    "showDemoAccounts": true
+  },
+  "permissions": {
+    "$comment": "Every permission the server checks. Roles below grant these; navigation items require them.",
+    "org.view": "See the organization overview",
+    "reports.view": "Open the embedded reports",
+    "entities.view": "See entities",
+    "entities.all": "See every entity in the organization (otherwise only assigned ones)",
+    "entities.manage": "Add, edit, reconnect and remove entities and groups",
+    "users.view": "See the organization's users",
+    "users.manage": "Invite users, change roles and entity access",
+    "sync.view": "See sync history",
+    "sync.run": "Start a sync",
+    "activity.view": "See the activity log",
+    "settings.manage": "Change organization settings"
+  },
+  "roles": {
+    "$comment": "platform_admin is required and applies across all organizations. Every other role is assignable inside an organization; order sets the order in pickers. adminRole gets the last-admin protection.",
+    "platform_admin": {
+      "label": "Platform admin",
+      "description": "Runs the platform: creates organizations and can open any of them.",
+      "permissions": [
+        "*"
+      ]
+    },
+    "org_admin": {
+      "label": "Organization admin",
+      "description": "Manages entities, users and settings for one organization.",
+      "permissions": [
+        "org.view",
+        "reports.view",
+        "entities.view",
+        "entities.all",
+        "entities.manage",
+        "users.view",
+        "users.manage",
+        "sync.view",
+        "sync.run",
+        "activity.view",
+        "settings.manage"
+      ],
+      "order": 1
+    },
+    "finance": {
+      "label": "Finance",
+      "description": "Sees every entity, runs syncs, cannot manage users or settings.",
+      "permissions": [
+        "org.view",
+        "reports.view",
+        "entities.view",
+        "entities.all",
+        "sync.view",
+        "sync.run",
+        "activity.view"
+      ],
+      "order": 2
+    },
+    "member": {
+      "label": "Member",
+      "description": "Sees only the entities assigned to them.",
+      "permissions": [
+        "org.view",
+        "reports.view",
+        "entities.view",
+        "sync.view"
+      ],
+      "order": 3
+    }
+  },
+  "adminRole": "org_admin",
+  "defaultInviteRole": "member",
+  "navigation": {
+    "$comment": "Sidebar items inside an organization, in order. Set enabled=false to hide a module everywhere. permission decides who sees it.",
+    "org": [
+      {
+        "id": "overview",
+        "label": "Overview",
+        "icon": "home",
+        "permission": "org.view",
+        "enabled": true
+      },
+      {
+        "id": "reports",
+        "label": "Reports",
+        "icon": "chart",
+        "permission": "reports.view",
+        "enabled": true
+      },
+      {
+        "id": "entities",
+        "label": "Entities",
+        "icon": "building",
+        "permission": "entities.view",
+        "enabled": true
+      },
+      {
+        "id": "users",
+        "label": "Users & access",
+        "icon": "users",
+        "permission": "users.view",
+        "enabled": true
+      },
+      {
+        "id": "sync",
+        "label": "Sync",
+        "icon": "refresh",
+        "permission": "sync.view",
+        "enabled": true
+      },
+      {
+        "id": "activity",
+        "label": "Activity",
+        "icon": "list",
+        "permission": "activity.view",
+        "enabled": true
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "icon": "settings",
+        "permission": "settings.manage",
+        "enabled": true
+      }
+    ],
+    "platform": [
+      {
+        "id": "organizations",
+        "label": "Organizations",
+        "icon": "grid",
+        "enabled": true
+      }
+    ]
+  },
+  "entityStatuses": {
+    "$comment": "tone: good | warning | critical | neutral. attention=true counts the entity under 'Needs attention'. includeInFigures=false leaves it out of totals.",
+    "connected": {
+      "label": "Connected",
+      "tone": "good",
+      "attention": false,
+      "includeInFigures": true
+    },
+    "needs_reconnect": {
+      "label": "Needs reconnect",
+      "tone": "warning",
+      "attention": true,
+      "includeInFigures": true
+    },
+    "error": {
+      "label": "Sync error",
+      "tone": "critical",
+      "attention": true,
+      "includeInFigures": true
+    },
+    "pending": {
+      "label": "Awaiting connection",
+      "tone": "neutral",
+      "attention": false,
+      "includeInFigures": false
+    }
+  },
+  "orgStatuses": {
+    "active": {
+      "label": "Active",
+      "tone": "good",
+      "canSignIn": true
+    },
+    "trial": {
+      "label": "Trial",
+      "tone": "warning",
+      "canSignIn": true
+    },
+    "suspended": {
+      "label": "Suspended",
+      "tone": "critical",
+      "canSignIn": false
+    }
+  },
+  "connectors": [
+    {
+      "id": "quickbooks",
+      "label": "QuickBooks Online",
+      "enabled": true,
+      "liveConnect": true
+    },
+    {
+      "id": "xero",
+      "label": "Xero",
+      "enabled": false,
+      "note": "Coming soon"
+    },
+    {
+      "id": "sage_intacct",
+      "label": "Sage Intacct",
+      "enabled": false,
+      "note": "Coming soon"
+    },
+    {
+      "id": "netsuite",
+      "label": "NetSuite",
+      "enabled": false,
+      "note": "Coming soon"
+    }
+  ],
+  "plans": [
+    {
+      "id": "trial",
+      "label": "Trial",
+      "maxEntities": 3,
+      "maxUsers": 5
+    },
+    {
+      "id": "standard",
+      "label": "Standard",
+      "maxEntities": 10,
+      "maxUsers": 25
+    },
+    {
+      "id": "pro",
+      "label": "Pro",
+      "maxEntities": 50,
+      "maxUsers": 200
+    },
+    {
+      "id": "enterprise",
+      "label": "Enterprise",
+      "maxEntities": null,
+      "maxUsers": null
+    }
+  ],
+  "industries": [
+    "Dental",
+    "Orthodontics",
+    "Healthcare",
+    "Veterinary",
+    "Food & beverage",
+    "Retail",
+    "Professional services",
+    "Construction",
+    "Other"
+  ],
+  "options": {
+    "currencies": [
+      "USD",
+      "CAD",
+      "GBP",
+      "EUR",
+      "AUD",
+      "INR"
+    ],
+    "timezones": [
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "Europe/London",
+      "Asia/Kolkata",
+      "Australia/Sydney"
+    ],
+    "syncSchedules": [
+      {
+        "id": "nightly",
+        "label": "Nightly at 02:00"
+      },
+      {
+        "id": "every_6h",
+        "label": "Every 6 hours"
+      },
+      {
+        "id": "hourly",
+        "label": "Hourly"
+      },
+      {
+        "id": "manual",
+        "label": "Manual only"
+      }
+    ],
+    "brandColors": [
+      "#2a78d6",
+      "#1baf7a",
+      "#4a3aa7",
+      "#eb6834",
+      "#e87ba4",
+      "#008300",
+      "#e34948",
+      "#eda100"
+    ]
+  },
+  "orgDefaults": {
+    "plan": "standard",
+    "status": "active",
+    "industry": "Other",
+    "currency": "USD",
+    "timezone": "America/New_York",
+    "fiscalYearStart": 1,
+    "syncSchedule": "nightly",
+    "brandColor": "#2a78d6"
+  },
+  "overview": {
+    "$comment": "months: trailing window for overview figures and chart. topEntities: rows in the entity table (null = every entity). recentRuns: rows in the recent-sync list.",
+    "months": 12,
+    "topEntities": null,
+    "recentRuns": 8
+  },
+  "sync": {
+    "$comment": "Sample-entity sync simulation. Live entities (linked to a connected QuickBooks company) run the real sync.",
+    "historyDays": 14,
+    "historyLimit": 300,
+    "sampleRows": {
+      "min": 40,
+      "max": 160
+    },
+    "messages": {
+      "needs_reconnect": "QuickBooks authorization expired. Reconnect the entity to resume syncing.",
+      "error": "QuickBooks returned an error for the ProfitAndLoss report. Retrying next run."
+    }
+  },
+  "reports": {
+    "$comment": "The Reports page embeds the existing P&L dashboard unchanged. It is shown only for organizations with liveDashboard=true in the seed, because it holds that organization's real data. devUrl is used when the web app runs under Vite.",
+    "embed": {
+      "enabled": true,
+      "path": "/",
+      "devUrl": "http://localhost:5173/",
+      "height": "calc(100vh - 140px)",
+      "placeholderTitle": "Reports are not connected for this organization yet",
+      "placeholderBody": "Once its entities are connected to QuickBooks and synced, the P&L dashboard, office comparison and chart of accounts appear here."
+    }
+  },
+  "sampleData": {
+    "$comment": "seedOnStartup loads the seed file into an empty platform database. Sample entities show generated figures with a 'Sample data' badge.",
+    "seedOnStartup": true,
+    "file": "platform.seed.json",
+    "badge": "Sample data"
+  }
+}

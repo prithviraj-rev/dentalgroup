@@ -1,0 +1,35 @@
+# Fly.io config (alternative to Railway). Usage:
+#   fly launch --no-deploy --copy-config   (pick a region, keep this file)
+#   fly volumes create data --size 1
+#   fly secrets set QBO_CLIENT_ID=... QBO_CLIENT_SECRET=... APP_USER=... APP_PASSWORD=... PUBLIC_URL=https://<app>.fly.dev
+#   fly deploy
+app = "qbo-pnl-dashboard"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  SERVE_WEB = "1"
+  PORT = "3000"
+  DB_PATH = "/data/pnl.db"
+  QBO_ENVIRONMENT = "sandbox"
+
+[[mounts]]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"

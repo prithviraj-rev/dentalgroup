@@ -64,6 +64,11 @@ export function openDb(file = config.dbPath) {
       finished_at  TEXT NOT NULL
     );
   `);
+  // Company details from QuickBooks CompanyInfo (legal name and address), refreshed on every sync.
+  const cols = new Set(db.prepare('PRAGMA table_info(connections)').all().map((c) => c.name));
+  for (const [col, type] of [['legal_name', 'TEXT'], ['city', 'TEXT'], ['state', 'TEXT'], ['country', 'TEXT'], ['details_json', 'TEXT']]) {
+    if (!cols.has(col)) db.exec(`ALTER TABLE connections ADD COLUMN ${col} ${type}`);
+  }
   return db;
 }
 

@@ -18,9 +18,13 @@
     "sync": "curl -s -X POST http://localhost:3000/sync",
     "sync:node": "node scripts/sync.js",
     "build": "npm run build -w web",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "start": "cross-env NODE_ENV=production SERVE_WEB=1 node server/index.js",
+    "start:plain": "node server/index.js",
+    "preview": "npm run build && npm start"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3"
   }
 }

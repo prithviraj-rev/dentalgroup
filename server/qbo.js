@@ -108,6 +108,34 @@ export async function fetchCompanyNameWithToken(realmId, accessToken) {
   return JSON.parse(body).CompanyInfo?.CompanyName || realmId;
 }
 
+/** CompanyInfo: name, legal name and address of the QuickBooks company. */
+export async function getCompanyInfo(db, realmId) {
+  const json = await qboGet(db, realmId, `companyinfo/${realmId}`);
+  const c = json.CompanyInfo || {};
+  const addr = c.CompanyAddr || c.LegalAddr || {};
+  return {
+    companyName: c.CompanyName || realmId,
+    legalName: c.LegalName || null,
+    city: addr.City || null,
+    state: addr.CountrySubDivisionCode || null,
+    country: addr.Country || c.Country || null,
+    // Everything else QuickBooks knows about the company, for identifying it (no financial data).
+    details: {
+      companyAddr: c.CompanyAddr || null,
+      legalAddr: c.LegalAddr || null,
+      customerAddr: c.CustomerCommunicationAddr || null,
+      email: c.Email?.Address || null,
+      customerEmail: c.CustomerCommunicationEmailAddr?.Address || null,
+      phone: c.PrimaryPhone?.FreeFormNumber || null,
+      web: c.WebAddr?.URI || null,
+      startDate: c.CompanyStartDate || null,
+      fiscalYearStartMonth: c.FiscalYearStartMonth || null,
+      createdAt: c.MetaData?.CreateTime || null,
+      nameValues: Object.fromEntries((c.NameValue || []).map((nv) => [nv.Name, nv.Value])),
+    },
+  };
+}
+
 export async function getCompanyName(db, realmId) {
   const json = await qboGet(db, realmId, `companyinfo/${realmId}`);
   return json.CompanyInfo?.CompanyName || realmId;

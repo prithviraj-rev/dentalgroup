@@ -24,7 +24,24 @@ const APP_CONFIG_DEFAULTS = {
     chartHeights: { main: 320, office: 280 },
     syncToastSeconds: { success: 8, error: 12 },
   },
-  compare: { maxOffices: 4, minOffices: 2, defaultMetric: 'netIncome', metrics: ['income', 'expenses', 'netIncome'] },
+  compare: { maxOffices: null, minOffices: 2, defaultMetric: 'netIncome', metrics: ['income', 'expenses', 'netIncome'] },
+  analysis: {
+    enabled: true, defaultMetric: 'netCollections', defaultBy: 'office', percentOf: 'netCollections',
+    metrics: ['netCollections', 'officeEbitda', 'pct:officeEbitda'],
+    dimensions: ['office', 'row', 'account'],
+    dimensionLabels: { office: 'Office', row: 'Statement row', account: 'QuickBooks account' },
+    topN: 8,
+    chart: { default: 'lines', options: ['lines', 'bars', 'stacked', 'small', 'ranked'] },
+  },
+  officeCategories: { file: 'config/dashboard-categories.json' },
+  executive: { enabled: true, file: 'config/executive.json' },
+  categoryView: { enabled: true, file: 'config/category-view.json' },
+  groupOverview: { enabled: true, file: 'config/group-overview.json' },
+  finance: { enabled: true, file: 'config/finance.json' },
+  practiceKpis: { enabled: true, file: 'config/practice-kpis.json' },
+  offices: { enabled: true, file: 'config/offices.json' },
+  officesSheet: { enabled: true, file: 'config/offices-sheet.json', apiPath: 'office-sheet', label: 'Offices (client sheet)' },
+  rawSync: { file: 'config/raw-sync.json' },
   officeChart: { enabled: true, maxOffices: 8, metric: 'netIncome' },
   charts: {
     main: { default: 'combo', options: ['combo', 'lines', 'bars', 'stacked'] },
@@ -52,7 +69,10 @@ const APP_CONFIG_DEFAULTS = {
     expenseGroups: ['COGS', 'Expenses', 'OtherExpenses'],
     colors: { Income: 1, COGS: 2, Expenses: 5, OtherIncome: 6, OtherExpenses: 7 }, // palette slots
   },
-  sync: { startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', sequential: true, includeChartOfAccounts: true },
+  sync: {
+    startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', sequential: true, includeChartOfAccounts: true,
+    schedule: { enabled: true, time: '03:00', timezone: 'America/Chicago', catchUpOnStart: true, maxAgeHours: 26 },
+  },
   qbo: { minorVersion: 75, refreshSkewMinutes: 5, oauthStateTtlMinutes: 10 },
 };
 
@@ -82,10 +102,24 @@ export function loadAppConfig(file = appConfigPath) {
 
   // Sanity checks so a bad edit fails loudly at startup instead of producing odd dashboards.
   const c = cfg.compare;
-  if (!Number.isInteger(c.maxOffices) || c.maxOffices < 1) throw new Error('app.config.json: compare.maxOffices must be a positive integer');
-  if (!Number.isInteger(c.minOffices) || c.minOffices < 1 || c.minOffices > c.maxOffices) throw new Error('app.config.json: compare.minOffices must be between 1 and compare.maxOffices');
-  if (!Number.isInteger(cfg.officeChart.maxOffices) || cfg.officeChart.maxOffices < 1 || cfg.officeChart.maxOffices > 8) throw new Error('app.config.json: officeChart.maxOffices must be 1..8 (the palette has 8 slots)');
-  for (const m of [...c.metrics, c.defaultMetric, cfg.officeChart.metric]) {
+  if (c.maxOffices !== null && (!Number.isInteger(c.maxOffices) || c.maxOffices < 1)) throw new Error('app.config.json: compare.maxOffices must be a positive integer or null (no limit)');
+  if (!Number.isInteger(c.minOffices) || c.minOffices < 1 || (c.maxOffices !== null && c.minOffices > c.maxOffices)) throw new Error('app.config.json: compare.minOffices must be between 1 and compare.maxOffices');
+  if (cfg.officeChart.maxOffices !== null && (!Number.isInteger(cfg.officeChart.maxOffices) || cfg.officeChart.maxOffices < 1)) throw new Error('app.config.json: officeChart.maxOffices must be a positive integer or null (every office)');
+  const a = cfg.analysis;
+  const DIMS = ['office', 'row', 'account'];
+  for (const d of a.dimensions) if (!DIMS.includes(d) && !/^category:[a-z0-9_-]+$/i.test(d)) throw new Error(`app.config.json: analysis.dimensions has unknown "${d}" (use ${DIMS.join(' | ')} | category:<id>)`);
+  if (!a.dimensions.includes(a.defaultBy)) throw new Error('app.config.json: analysis.defaultBy must be one of analysis.dimensions');
+  // Metric keys are checked against the office statement rows when the Offices router starts (server/offices/api.js).
+  if (!Array.isArray(a.metrics) || !a.metrics.length) throw new Error('app.config.json: analysis.metrics must list at least one office statement row key');
+  for (const m of a.metrics) if (!/^(pct:)?[a-z][A-Za-z0-9]*$/.test(m)) throw new Error(`app.config.json: analysis.metrics has invalid "${m}" (use a row key from config/offices.json rows.list, or pct:<row key>)`);
+  if (!a.metrics.includes(a.defaultMetric)) throw new Error('app.config.json: analysis.defaultMetric must be one of analysis.metrics');
+  if (typeof a.percentOf !== 'string' || !a.percentOf) throw new Error('app.config.json: analysis.percentOf must be the collections row key of config/offices.json');
+  const os = cfg.officesSheet;
+  if (!/^[a-z][a-z0-9-]*$/.test(String(os.apiPath)) || os.apiPath === 'office-view' || os.apiPath === 'analysis') throw new Error('app.config.json: officesSheet.apiPath must be a lower-case URL segment other than office-view');
+  if (typeof os.label !== 'string' || !os.label.trim()) throw new Error('app.config.json: officesSheet.label is required');
+  if (!Number.isInteger(a.topN) || a.topN < 1 || a.topN > 8) throw new Error('app.config.json: analysis.topN must be 1..8');
+  if (!a.chart.options.length || a.chart.options.some((t) => !['lines', 'bars', 'stacked', 'small', 'ranked'].includes(t)) || !a.chart.options.includes(a.chart.default)) throw new Error('app.config.json: analysis.chart options must come from lines | bars | stacked | small | ranked and include the default');
+  for (const m of [...c.metrics, c.defaultMetric, cfg.officeChart.metric, ...(cfg.dashboard.secondaryKpis || [])]) {
     if (!cfg.metrics[m]) throw new Error(`app.config.json: unknown metric "${m}"`);
   }
   if (!cfg.dashboard.granularities.includes(cfg.dashboard.defaultGranularity)) throw new Error('app.config.json: dashboard.defaultGranularity is not in dashboard.granularities');
@@ -121,10 +155,15 @@ const environment = (env.QBO_ENVIRONMENT || 'sandbox').toLowerCase();
 export const config = {
   clientId: env.QBO_CLIENT_ID || '',
   clientSecret: env.QBO_CLIENT_SECRET || '',
-  redirectUri: env.QBO_REDIRECT_URI || 'http://localhost:3000/callback',
+  redirectUri: env.QBO_REDIRECT_URI || (env.PUBLIC_URL ? `${env.PUBLIC_URL.replace(/\/$/, '')}/callback` : 'http://localhost:3000/callback'),
   environment,
   port: Number(env.PORT || 3000),
   webOrigin: env.WEB_ORIGIN || 'http://localhost:5173',
+  // Hosting: serve web/dist from this process (one origin), public URL for logs, optional basic auth.
+  serveWeb: ['1', 'true', 'yes'].includes(String(env.SERVE_WEB || (env.NODE_ENV === 'production' ? '1' : '')).toLowerCase()),
+  publicUrl: (env.PUBLIC_URL || '').replace(/\/$/, ''),
+  appUser: env.APP_USER || '',
+  appPassword: env.APP_PASSWORD || '',
   dbPath: path.resolve(ROOT, env.DB_PATH || 'data/pnl.db'),
   apiBase:
     environment === 'production'

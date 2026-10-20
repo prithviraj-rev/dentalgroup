@@ -109,7 +109,7 @@ export default function ChartOfAccounts({ config, filters, officeParam, reloadKe
       return ok || kids;
     };
     return v;
-  }, [hideInactive, hideNoActivity, q]);
+  }, [hideInactive, hideNoActivity, q, data]);
 
   if (error) {
     return <div className="card border-l-4 border-l-bad p-4 text-sm"><div className="font-medium">Could not load the chart of accounts</div><div className="text-ink2">{error}</div></div>;
@@ -122,9 +122,9 @@ export default function ChartOfAccounts({ config, filters, officeParam, reloadKe
       <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
         <div className="text-lg font-medium">No chart of accounts yet, run sync</div>
         <p className="max-w-md text-sm text-ink2">
-          {meta?.connections ? 'The chart of accounts is pulled from QuickBooks on every sync.' : <>Connect a company at <a className="text-accent hover:underline" href={`${API_BASE}/connect`}>{API_BASE}/connect</a> first.</>}
+          {meta?.connections ? 'The chart of accounts is pulled from QuickBooks on every sync.' : meta?.can?.connect !== false ? <>Connect a company at <a className="text-accent hover:underline" href={`${API_BASE}/connect`}>{API_BASE}/connect</a> first.</> : 'No companies are available to you yet. Ask an administrator.'}
         </p>
-        <button type="button" onClick={onSync} disabled={syncing} className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white disabled:opacity-60">{syncing ? 'Syncing…' : 'Sync now'}</button>
+        {meta?.can?.sync !== false && <button type="button" onClick={onSync} disabled={syncing} className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white disabled:opacity-60">{syncing ? 'Syncing…' : 'Sync now'}</button>}
       </div>
     );
   }

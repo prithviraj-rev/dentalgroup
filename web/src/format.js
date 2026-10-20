@@ -29,7 +29,26 @@ export const groupColor = (g) => `var(--series-${cfg?.groups?.colors?.[g] || 1})
 /** Metric descriptor from config: { key, label, upIsGood, color }. */
 export function metric(key) {
   const m = cfg?.metrics?.[key] || { label: key, upIsGood: true, color: 1 };
-  return { key, ...m, color: `var(--series-${m.color})` };
+  return { key, ...m, format: m.ratio ? 'percent' : 'money', color: `var(--series-${m.color || 1})` };
+}
+
+export const isPercent = (key) => metric(key).format === 'percent';
+
+/** Format a metric value: money for sums, percentage for ratios. null -> en dash. */
+export function fmtMetric(key, v, compact = false) {
+  if (v == null || !Number.isFinite(v)) return '–';
+  if (isPercent(key)) return `${(v * 100).toFixed(1)}%`;
+  return compact ? fmtCompact(v) : fmtMoney(v);
+}
+
+/** Change between two values of a metric: % change for money, percentage points for ratios. */
+export function fmtChange(key, cur, prev) {
+  if (prev == null || cur == null) return 'n/a';
+  if (isPercent(key)) {
+    const d = (cur - prev) * 100;
+    return `${d > 0 ? '+' : ''}${d.toFixed(1)} pts`;
+  }
+  return fmtPct(pctChange(cur, prev));
 }
 
 export const officeColor = (colorIndex) => `var(--series-${(colorIndex % 8) + 1})`;

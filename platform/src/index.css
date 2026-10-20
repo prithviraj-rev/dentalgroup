@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Same tokens as the P&L dashboard so the embedded reports and the shell read as one product.
+   --accent is overridden per organization (brand color) at runtime. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --line: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.1);
+  --wash: rgba(11, 11, 11, 0.04);
+  --accent: #2a78d6;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --line: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255, 255, 255, 0.1);
+    --wash: rgba(255, 255, 255, 0.05);
+    --good-text: #0ca30c;
+    --critical: #e66767;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+  }
+}
+
+html, body { background: var(--page); color: var(--ink); }
+
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; }
+
+.control {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  padding: 6px 10px;
+  height: 36px;
+  width: 100%;
+}
+.control:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 14px; border-radius: 8px; font-size: 14px; font-weight: 500;
+  border: 1px solid var(--ring); background: var(--surface); color: var(--ink);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--wash); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn-danger { color: var(--critical); }
+.btn-sm { height: 30px; padding: 0 10px; font-size: 13px; }
+
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); height: 32px; }
+.seg button { padding: 0 10px; font-size: 13px; color: var(--ink-2); }
+.seg button + button { border-left: 1px solid var(--ring); }
+.seg button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+
+.table { width: 100%; font-size: 14px; }
+.table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-2); padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.table td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+.table tbody tr:first-child td { border-top: 0; }
+.table tbody tr:hover td { background: var(--wash); }
+
+.tabular { font-variant-numeric: tabular-nums; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 14px; color: var(--ink-2); }
+.nav-item:hover { background: var(--wash); color: var(--ink); }
+.nav-item.active { background: var(--wash); color: var(--ink); font-weight: 500; box-shadow: inset 3px 0 0 var(--accent); }

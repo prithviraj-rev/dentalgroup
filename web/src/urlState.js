@@ -2,7 +2,7 @@
 //   ?office=all|<realmId>|<id>,<id>&from=YYYY-MM&to=YYYY-MM&granularity=month|quarter|year&yoy=1
 //   &metric=netIncome&mainChart=combo&officeChart=lines
 
-const KEYS = ['tab', 'office', 'from', 'to', 'granularity', 'metric', 'mainChart', 'officeChart'];
+const KEYS = ['tab', 'office', 'cat', 'from', 'to', 'granularity', 'metric', 'mainChart', 'officeChart', 'ametric', 'by', 'achart'];
 
 export function readUrlState() {
   const q = new URLSearchParams(window.location.search);
@@ -15,7 +15,7 @@ export function readUrlState() {
 export function writeUrlState(state) {
   const q = new URLSearchParams();
   for (const k of KEYS) if (state[k]) q.set(k, state[k]);
-  if (state.yoy) q.set('yoy', '1');
+  if (state.yoy === '1' || state.yoy === '0') q.set('yoy', state.yoy);
   const next = `${window.location.pathname}?${q}`;
   if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', next);
 }

@@ -42,6 +42,12 @@ export function updateCompanyName(db, realmId, companyName) {
     .run(companyName, new Date().toISOString(), realmId);
 }
 
+export function updateCompanyInfo(db, realmId, info) {
+  db.prepare(`UPDATE connections SET company_name = @companyName, legal_name = @legalName, city = @city, state = @state,
+              country = @country, details_json = @detailsJson, updated_at = @now WHERE realm_id = @realmId`)
+    .run({ ...info, detailsJson: info.details ? JSON.stringify(info.details) : null, realmId, now: new Date().toISOString() });
+}
+
 export function deleteConnection(db, realmId) {
   db.prepare('DELETE FROM connections WHERE realm_id = ?').run(realmId);
 }

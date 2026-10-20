@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Line, Cell, LabelList,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
 } from 'recharts';
-import { fmtCompact, fmtMoney, metric as metricOf, officeColor, groupColor, groupLabel } from '../format.js';
+import { fmtCompact, fmtMoney, fmtMetric, isPercent, metric as metricOf, officeColor, groupColor, groupLabel } from '../format.js';
 
 const axisTick = { fill: 'var(--muted)', fontSize: 12 };
 const barCursor = { fill: 'var(--ring)' };
@@ -17,6 +17,8 @@ const lineProps = (color) => ({
   dot: lineDot(color), activeDot: activeDot(color), isAnimationActive: false,
 });
 
+export { TooltipBox, Axes };
+
 export const CHART_TYPE_LABELS = {
   combo: 'Bars + line',
   lines: 'Lines',
@@ -26,7 +28,7 @@ export const CHART_TYPE_LABELS = {
   ranked: 'Ranked totals',
 };
 
-function TooltipBox({ active, payload, label, series }) {
+function TooltipBox({ active, payload, label, series, fmt = fmtMoney }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="card px-3 py-2 text-sm shadow-sm">
@@ -40,7 +42,7 @@ function TooltipBox({ active, payload, label, series }) {
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} aria-hidden="true" />
               {s.label}
             </span>
-            <span className="tabular">{fmtMoney(p.value)}</span>
+            <span className="tabular">{fmt(p.value)}</span>
           </div>
         );
       })}
@@ -96,11 +98,11 @@ function Frame({ title, legend, picker, children, note }) {
   );
 }
 
-const Axes = ({ yWidth = 64 }) => (
+const Axes = ({ yWidth = 64, fmt = fmtCompact }) => (
   <>
     <CartesianGrid vertical={false} stroke="var(--line)" strokeWidth={1} />
     <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} interval="preserveStartEnd" minTickGap={24} />
-    <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={yWidth} />
+    <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={fmt} width={yWidth} />
     <ReferenceLine y={0} stroke="var(--axis)" />
   </>
 );
@@ -201,23 +203,36 @@ export function MainChart({ periods, height = 320, type = 'combo', options, onTy
  */
 export function OfficeChart({
   periods, offices, metricKey = 'netIncome', colorIndexOf, maxOffices = 8, height = 280, title,
-  type = 'lines', options, onTypeChange,
+  type: requestedType = 'lines', options, onTypeChange,
 }) {
   const m = metricOf(metricKey);
-  const shown = offices.slice(0, maxOffices);
-  const series = shown.map((o) => ({ key: o.realmId, label: o.officeName, color: officeColor(colorIndexOf(o.realmId)) }));
+  const shown = maxOffices ? offices.slice(0, maxOffices) : offices;
+  // Past 8 offices colors would repeat, so every office gets the same color and its name carries identity.
+  const oneColor = shown.length > 8;
+  const pctMetric = isPercent(metricKey);
+  const fmtV = (v) => fmtMetric(metricKey, v);
+  const fmtTick = (v) => fmtMetric(metricKey, v, true);
+  // The palette has 8 slots: past 8 offices only small multiples and ranked totals stay readable.
+  // Stacking ratios (margins) adds up percentages, so it is not offered for them.
+  const crowded = oneColor;
+  const allowed = (options || [requestedType]).filter((t) => (!crowded || ['small', 'ranked'].includes(t)) && !(pctMetric && t === 'stacked'));
+  const type = allowed.includes(requestedType) ? requestedType : allowed[0] || 'small';
+  const series = shown.map((o) => ({ key: o.realmId, label: o.officeName, color: oneColor ? 'var(--series-1)' : officeColor(colorIndexOf(o.realmId)) }));
   const data = useMemo(
     () => periods.map((p) => {
       const row = { label: p.label };
-      for (const o of shown) row[o.realmId] = o.periods[p.key]?.[metricKey] ?? 0;
+      for (const o of shown) row[o.realmId] = o.periods[p.key]?.[metricKey] ?? (pctMetric ? null : 0);
       return row;
     }),
     [periods, shown, metricKey]
   );
 
   const heading = title || `${m.label} by office`;
-  const note = offices.length > maxOffices ? `Showing the first ${maxOffices} offices by name.` : null;
-  const picker = <ChartTypePicker options={options} value={type} onChange={onTypeChange} label="Chart type" />;
+  const note = [
+    maxOffices && offices.length > maxOffices ? `Showing the first ${maxOffices} offices by name.` : null,
+    crowded ? `${shown.length} offices: shown as small multiples or ranked totals so each office stays distinguishable.` : null,
+  ].filter(Boolean).join(' ') || null;
+  const picker = <ChartTypePicker options={allowed} value={type} onChange={onTypeChange} label="Chart type" />;
   const margin = { top: 8, right: 12, bottom: 0, left: 4 };
 
   if (type === 'small') {
@@ -226,7 +241,7 @@ export function OfficeChart({
     let hi = 0;
     for (const row of data) for (const s of series) { lo = Math.min(lo, row[s.key]); hi = Math.max(hi, row[s.key]); }
     const domain = [lo, hi === lo ? lo + 1 : hi];
-    const cols = series.length <= 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-4';
+    const cols = series.length <= 2 ? 'sm:grid-cols-2' : series.length <= 8 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-5';
     return (
       <Frame title={`${heading}, one panel per office`} picker={picker} note={note}>
         <div className={`grid grid-cols-1 gap-3 ${cols}`}>
@@ -241,9 +256,9 @@ export function OfficeChart({
                   <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid vertical={false} stroke="var(--line)" strokeWidth={1} />
                     <XAxis dataKey="label" tick={{ ...axisTick, fontSize: 10 }} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} interval="preserveStartEnd" minTickGap={32} />
-                    <YAxis domain={domain} tick={{ ...axisTick, fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={52} />
+                    <YAxis domain={domain} tick={{ ...axisTick, fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={fmtTick} width={52} />
                     <ReferenceLine y={0} stroke="var(--axis)" />
-                    <Tooltip cursor={lineCursor} content={<TooltipBox series={[s]} />} />
+                    <Tooltip cursor={lineCursor} content={<TooltipBox series={[s]} fmt={fmtV} />} />
                     <Line dataKey={s.key} {...lineProps(s.color)} dot={false} activeDot={activeDot(s.color)} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -257,7 +272,8 @@ export function OfficeChart({
 
   if (type === 'ranked') {
     const ranked = [...shown]
-      .map((o) => ({ label: o.officeName, key: o.realmId, value: o.totals?.[metricKey] ?? 0, color: officeColor(colorIndexOf(o.realmId)) }))
+      .filter((o) => !pctMetric || o.totals?.[metricKey] != null)
+      .map((o) => ({ label: o.officeName, key: o.realmId, value: o.totals?.[metricKey] ?? 0, color: oneColor ? 'var(--series-1)' : officeColor(colorIndexOf(o.realmId)) }))
       .sort((a, b) => b.value - a.value);
     const first = periods[0]?.label;
     const last = periods[periods.length - 1]?.label;
@@ -268,13 +284,13 @@ export function OfficeChart({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ranked} layout="vertical" margin={{ top: 4, right: 72, bottom: 0, left: 4 }} barCategoryGap="30%">
               <CartesianGrid horizontal={false} stroke="var(--line)" strokeWidth={1} />
-              <XAxis type="number" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={fmtCompact} />
+              <XAxis type="number" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={fmtTick} />
               <YAxis type="category" dataKey="label" tick={{ ...axisTick, fill: 'var(--ink-2)' }} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} width={150} />
               <ReferenceLine x={0} stroke="var(--axis)" />
-              <Tooltip cursor={barCursor} content={<TooltipBox series={[{ key: 'value', label: m.label, color: 'var(--ink-2)' }]} />} />
+              <Tooltip cursor={barCursor} content={<TooltipBox series={[{ key: 'value', label: m.label, color: 'var(--ink-2)' }]} fmt={fmtV} />} />
               <Bar dataKey="value" maxBarSize={20} radius={[0, 4, 4, 0]} isAnimationActive={false}>
                 {ranked.map((r) => <Cell key={r.key} fill={r.color} />)}
-                <LabelList dataKey="value" position="right" formatter={fmtMoney} style={{ fill: 'var(--ink-2)', fontSize: 12 }} />
+                <LabelList dataKey="value" position="right" formatter={fmtV} style={{ fill: 'var(--ink-2)', fontSize: 12 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -287,16 +303,16 @@ export function OfficeChart({
   if (type === 'bars') {
     chart = (
       <BarChart data={data} margin={margin} barGap={2} barCategoryGap="25%">
-        <Axes />
-        <Tooltip cursor={barCursor} content={<TooltipBox series={series} />} />
+        <Axes fmt={fmtTick} />
+        <Tooltip cursor={barCursor} content={<TooltipBox series={series} fmt={fmtV} />} />
         {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={s.color} radius={ROUND_TOP} {...BAR} />)}
       </BarChart>
     );
   } else if (type === 'stacked') {
     chart = (
       <BarChart data={data} margin={margin} barCategoryGap="30%">
-        <Axes />
-        <Tooltip cursor={barCursor} content={<TooltipBox series={series} />} />
+        <Axes fmt={fmtTick} />
+        <Tooltip cursor={barCursor} content={<TooltipBox series={series} fmt={fmtV} />} />
         {series.map((s, i) => (
           <Bar key={s.key} dataKey={s.key} stackId="o" fill={s.color} stroke="var(--surface)" strokeWidth={2}
                radius={i === series.length - 1 ? ROUND_TOP : 0} {...BAR} />
@@ -306,8 +322,8 @@ export function OfficeChart({
   } else {
     chart = (
       <LineChart data={data} margin={margin}>
-        <Axes />
-        <Tooltip cursor={lineCursor} content={<TooltipBox series={series} />} />
+        <Axes fmt={fmtTick} />
+        <Tooltip cursor={lineCursor} content={<TooltipBox series={series} fmt={fmtV} />} />
         {series.map((s) => <Line key={s.key} dataKey={s.key} {...lineProps(s.color)} />)}
       </LineChart>
     );

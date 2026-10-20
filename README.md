@@ -204,6 +204,57 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 | `npm run sync:node` | Same via Node fetch (for shells without curl). |
 | `npm test` | Parser, upsert and config tests. |
 | `npm run build` | Production build of the dashboard into `web/dist`. |
+| `npm start` | Production mode: one server on :3000 serving the API and `web/dist`, with basic auth when `APP_USER`/`APP_PASSWORD` are set. |
+| `npm run preview` | `build` then `start`. |
+
+## Hosting it online
+
+In production one Node process serves both the API and the built dashboard on one origin, behind a
+basic-auth login. SQLite must live on a persistent disk. `npm start` runs that mode locally
+(`npm run preview` builds first). Routes: `/` dashboard, `/connections` connections page, `/connect`,
+`/callback`, `/sync`, `/api/*`, `/health` (no auth).
+
+Environment variables for any host:
+
+| Variable | Value |
+|---|---|
+| `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` | Intuit keys (Development keys for sandbox companies). |
+| `PUBLIC_URL` | The deployment's HTTPS URL, e.g. `https://qbo-pnl.up.railway.app`. `QBO_REDIRECT_URI` defaults to `<PUBLIC_URL>/callback`, so leave `QBO_REDIRECT_URI` unset on the host (the local `.env` is not uploaded). |
+| `APP_USER`, `APP_PASSWORD` | Login for the whole app. Set both. |
+| `DB_PATH` | SQLite file on the persistent disk, e.g. `/data/pnl.db`. |
+| `NODE_ENV=production`, `SERVE_WEB=1` | Set by `npm start`; set explicitly if the host runs `node server/index.js`. |
+| `QBO_ENVIRONMENT` | `sandbox` (default) or `production`. |
+
+Then add `<PUBLIC_URL>/callback` to the Redirect URIs of the Intuit app (Development tab for sandbox).
+Intuit requires HTTPS for any non-localhost redirect URI, which every host below provides.
+
+### Railway (recommended)
+
+1. Create an account at https://railway.com and install the CLI: `npm i -g @railway/cli`, then `railway login`.
+2. In this folder: `railway init` (new project), then `railway up` to build and deploy. `railway.json`
+   sets the build (`npm ci && npm run build`), start (`npm start`) and the `/health` check.
+3. In the Railway dashboard open the service → **Settings → Volumes → Add volume**, mount path `/data`.
+4. **Settings → Networking → Generate domain**, copy the URL.
+5. **Variables**: add the table above (`DB_PATH=/data/pnl.db`, `PUBLIC_URL=https://<your domain>`,
+   keys, `APP_USER`, `APP_PASSWORD`). Railway redeploys.
+6. Register `https://<your domain>/callback` on the Intuit app, open `https://<your domain>/connect`,
+   connect each company, then **Sync now** in the dashboard.
+
+### Fly.io
+
+`fly.toml` and the `Dockerfile` are included: `fly launch --no-deploy --copy-config`,
+`fly volumes create data --size 1`, `fly secrets set …` (see the comment in `fly.toml`), `fly deploy`.
+
+### Render / other container hosts
+
+Use the `Dockerfile`, attach a persistent disk at `/data`, and set the variables above. Render's
+persistent disks need a paid instance.
+
+### Quick demo from your own PC
+
+`npm run preview` then expose port 3000 with a tunnel such as `cloudflared tunnel --url http://localhost:3000`
+or ngrok. Register the tunnel's `https://…/callback` on the Intuit app and set `PUBLIC_URL` to the
+tunnel URL. The link works only while your machine and the tunnel are up.
 
 ## Notes and limits (POC)
 

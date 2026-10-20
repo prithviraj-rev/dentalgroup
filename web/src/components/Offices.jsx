@@ -366,8 +366,12 @@ function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onC
             { label: 'Accounts receivable', value: money(o.ar), sub: `As of ${monthLabel(data.asOf)} month-end` },
             { label: 'Accounts payable', value: money(o.ap), sub: `As of ${monthLabel(data.asOf)} month-end` },
           ]} />}
-          {show('statement') && <Statement data={data} cols={cols} />}
-          {show('pl') && data.pl && <CombinedPl data={data} cols={cols} />}
+          {(show('statement') || (show('pl') && data.pl)) && (
+            <div className={`grid grid-cols-[minmax(0,1fr)] gap-4 ${!cols && show('statement') && show('pl') && data.pl ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}`}>
+              {show('statement') && <Statement data={data} cols={cols} />}
+              {show('pl') && data.pl && <CombinedPl data={data} cols={cols} />}
+            </div>
+          )}
           {(show('balanceSheet') || show('trends')) && (
             <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               {show('balanceSheet') && <BalanceSheet data={data} />}

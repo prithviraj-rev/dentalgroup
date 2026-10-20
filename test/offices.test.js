@@ -4,18 +4,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadOfficesConfig } from '../server/offices/config.js';
-import { resolveOffices, periodWindow, isPartnerName, eliminateInternal, classifyLine, buildStatement, flagsFor, balanceTree } from '../server/offices/offices.js';
+import { resolveOffices, combinedOffices, periodWindow, isPartnerName, eliminateInternal, classifyLine, buildStatement, flagsFor, balanceTree, canonicalBook } from '../server/offices/offices.js';
 import { officePl, monthlyPl } from '../server/offices/pl.js';
 
 test('client-sheet offices config: extends offices.json, rows hold exactly the account numbers of the sheet', () => {
   const sheet = loadOfficesConfig(path.resolve('config/offices-sheet.json'));
   assert.equal(sheet.rows.length, 14, 'the sheet has 14 rows incl. Small Equipment Lease');
-  assert.deepEqual(sheet.rows.map((r) => r.key), ['netCollections', 'providerComp', 'staffPayroll', 'trainingHiring', 'dentalSupplies', 'laboratory', 'occupancy', 'marketing', 'smallEquipmentLease', 'otherExpenses', 'ebitdaBeforeFees', 'managementFees', 'officeEbitda', 'operatingCashFlow']);
+  assert.deepEqual(sheet.rows.map((r) => r.key), ['netCollections', 'providerComp', 'staffPayroll', 'trainingHiring', 'marketing', 'dentalSupplies', 'laboratory', 'occupancy', 'smallEquipmentLease', 'otherExpenses', 'ebitdaBeforeFees', 'managementFees', 'officeEbitda', 'operatingCashFlow']);
   assert.equal(sheet.naming.pattern, cfg.naming.pattern, 'inherited');
   assert.equal(sheet.internal.income.unmatched, cfg.internal.income.unmatched, 'inherited');
   assert.equal(sheet.payrollTaxes.re, null, 'no proportional split: 576 / 506.2 / 506.3 are whole rows of Provider Compensation');
   assert.equal(sheet.cashFlow.includeLoanPayments, true);
   assert.equal(cfg.cashFlow.includeLoanPayments, false);
+  assert.equal(sheet.statement.rollUpSubAccounts, 'matched');
+  assert.deepEqual(sheet.page.sections, ['statement', 'pl'], 'statement plus the QuickBooks-style profit and loss');
+  assert.deepEqual(cfg.page.sections, ['tiles', 'statement', 'pl', 'balanceSheet', 'trends']);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { sections: ['charts'] } })), /page.sections/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, statement: { rollUpSubAccounts: 'deep' } })), /rollUpSubAccounts/);
   const k = (grp, account, fullName) => classifyLine(L('D', '2026-01', grp, account, 1, null, fullName), sheet);
   assert.deepEqual(k('Income', '402.1 Cash/Patient Checks', '402 Income:402.1 Cash/Patient Checks'), { kind: 'row', key: 'netCollections' });
   assert.deepEqual(k('Income', '401 Refunds', '402 Income:401 Refunds'), { kind: 'row', key: 'netCollections' });
@@ -25,17 +30,22 @@ test('client-sheet offices config: extends offices.json, rows hold exactly the a
   assert.deepEqual(k('Expenses', '504 Hygienist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist'), { kind: 'row', key: 'providerComp' });
   assert.deepEqual(k('Expenses', '576 Payroll Tax Expense', '5000.1 Total Payroll Expenses:550.1 Payroll Taxes & Fees:576 Payroll Tax Expense'), { kind: 'row', key: 'providerComp' }, 'whole, not split');
   assert.deepEqual(k('Expenses', '506.3 Bonus', '506 Employee Benefits Expense:506.3 Bonus'), { kind: 'row', key: 'providerComp' });
-  assert.deepEqual(k('Expenses', '506.1 Health Insurance', '506 Employee Benefits Expense:506.1 Health Insurance'), { kind: 'row', key: 'otherExpenses' }, 'not in the sheet');
-  assert.deepEqual(k('Expenses', "500 Doctor's payroll", "5000.1 Total Payroll Expenses:5000.2 Payroll Expense:500 Doctor's payroll"), { kind: 'row', key: 'otherExpenses' }, 'sheet column E does not list 500');
+  assert.deepEqual(k('Expenses', '506.1 Health Insurance', '506 Employee Benefits Expense:506.1 Health Insurance'), { kind: 'memo', key: 'unassigned' }, 'not in the sheet: left out of the statement');
+  assert.deepEqual(k('Expenses', "500 Doctor's payroll", "5000.1 Total Payroll Expenses:5000.2 Payroll Expense:500 Doctor's payroll"), { kind: 'memo', key: 'unassigned' }, 'sheet column E does not list 500');
+  assert.deepEqual(k('Expenses', '530.1 Dental Related Insurance', '530 Insurance:530.1 Dental Related Insurance'), { kind: 'row', key: 'otherExpenses' }, 'sheet: insurance 530 is Other');
+  assert.deepEqual(k('Expenses', '554.1 Office Expense', '554 Office Expense & Postage & Donations:554.1 Office Expense'), { kind: 'row', key: 'otherExpenses' });
+  assert.deepEqual(k('Expenses', '554.3 Postage', '554 Office Expense & Postage & Donations:554.3 Postage'), { kind: 'memo', key: 'unassigned' }, 'sheet lists 554.1 only');
+  assert.equal(sheet.page.memo, false);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { memo: 'no' } })), /page.memo/);
   assert.deepEqual(k('Expenses', '503 Staff Payroll', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:503 Staff Payroll'), { kind: 'row', key: 'staffPayroll' });
   assert.deepEqual(k('Expenses', '503.3 Temp Agency', '503 Contract Labor:503.3 Temp Agency'), { kind: 'row', key: 'staffPayroll' });
-  assert.deepEqual(k('Expenses', '502 Dental Assistant', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:502 Dental Assistant'), { kind: 'row', key: 'otherExpenses' }, 'not in the sheet');
+  assert.deepEqual(k('Expenses', '502 Dental Assistant', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:502 Dental Assistant'), { kind: 'memo', key: 'unassigned' }, 'not in the sheet');
   assert.deepEqual(k('Expenses', '517.2 Staff Training', '517 Continuing Ed & Training Courses:517.2 Staff Training'), { kind: 'row', key: 'trainingHiring' });
   assert.deepEqual(k('Expenses', '560.1 Dental', '560 Repairs & Maintenance:560.1 Dental'), { kind: 'row', key: 'otherExpenses' }, 'sheet: repairs 560 are Other');
-  assert.deepEqual(k('Expenses', '586.1 Electric', '586 Electric, Gas, Water & Trash:586.1 Electric'), { kind: 'row', key: 'otherExpenses' }, 'sheet: rent is 559 only');
+  assert.deepEqual(k('Expenses', '586.1 Electric', '586 Electric, Gas, Water & Trash:586.1 Electric'), { kind: 'memo', key: 'unassigned' }, 'sheet: rent is 559 only and 586 is in no row');
   assert.deepEqual(k('Expenses', '559.2 Common Area Maintenance', '559 Rent & NNN:559.2 Common Area Maintenance'), { kind: 'row', key: 'occupancy' });
   assert.deepEqual(k('Expenses', '540.1 Small Dental Equipment', '540 Equipment Lease Expense:540.1 Small Dental Equipment'), { kind: 'row', key: 'smallEquipmentLease' });
-  assert.deepEqual(k('Expenses', '540.2 Non-Dental', '540 Equipment Lease Expense:540.2 Non-Dental'), { kind: 'row', key: 'otherExpenses' });
+  assert.deepEqual(k('Expenses', '540.2 Non-Dental', '540 Equipment Lease Expense:540.2 Non-Dental'), { kind: 'memo', key: 'unassigned' });
   assert.deepEqual(k('Expenses', '650.1 Corporation Overhead Charges', '650 Management Fee:650.1 Corporation Overhead Charges'), { kind: 'row', key: 'managementFees' });
   assert.deepEqual(k('Expenses', '520 Depreciation Expense'), { kind: 'memo', key: 'notOperating' }, 'inherited');
   assert.deepEqual(k('OtherExpenses', '802.1 Management Profit', '802 Profits:802.1 Management Profit'), { kind: 'memo', key: 'profitTransfers' }, 'inherited');
@@ -51,6 +61,34 @@ test('client-sheet offices config: extends offices.json, rows hold exactly the a
   assert.deepEqual(children('providerComp'), [['504 Hygienist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist', 100], ['503.1 Dental Contract Labor', '503 Contract Labor:503.1 Dental Contract Labor', 75]], 'Dentist and Staff roll up into 503.1');
   assert.deepEqual(children('staffPayroll'), [['503 Contract Labor', '503 Contract Labor', 10]], 'rule 503 matches the top level, so 503.3 rolls up into it');
   assert.deepEqual(children('netCollections'), [['402 Income', '402 Income', 1000]]);
+  // One spelling per account across the companies of an office; children merge by name however the companies spell or nest it.
+  const books = {
+    A: { 1: { id: '1', name: '650 Management Fees', fullName: '650 Management Fees', type: 'Expense' }, 2: { id: '2', name: '503 Staff Payroll', fullName: '5000 Total Payroll Expenses:5000.1 Payroll Expense:503 Staff Payroll', type: 'Expense' } },
+    B: { 1: { id: '1', name: '650 Management fee', fullName: '650 Management fee', type: 'Expense' }, 2: { id: '2', name: '503 Staff payroll', fullName: '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:503 Staff payroll', type: 'Expense' } },
+    C: { 1: { id: '1', name: '650 Management Fee', fullName: '650 Management Fee', type: 'Expense' } },
+  };
+  books.A[3] = { id: '3', name: '503 Contract Labor', fullName: '503 Contract Labor', type: 'Expense' };
+  books.A[4] = { id: '4', name: '560 Repairs & Maintenance', fullName: '560 Repairs & Maintenance', type: 'Expense' };
+  books.B[4] = { id: '4', name: '560 Repairs and Maintenance', fullName: '560 Repairs and Maintenance', type: 'Expense' };
+  books.C[4] = { id: '4', name: '560 Repair & Maintenance', fullName: '560 Repair & Maintenance', type: 'Expense' };
+  books.B[5] = { id: '5', name: '539 Uniforms & Laundry', fullName: '539 Uniforms & Laundry', type: 'Expense' };
+  books.A[5] = { id: '5', name: '539 Laundry & Uniform', fullName: '539 Laundry & Uniform', type: 'Expense' };
+  const cb = canonicalBook((id) => books[id], ['A', 'B', 'C']);
+  assert.equal(cb('B')[1].name, '650 Management Fee', 'three spellings, one each: capitalised / shorter wins the tie');
+  assert.equal(cb('A')[1].fullName, '650 Management Fee');
+  assert.equal(cb('B')[2].name, '503 Staff Payroll', 'two 503 accounts in company A, so 503 merges by name only');
+  assert.equal(cb('A')[3].name, '503 Contract Labor');
+  assert.equal(cb('B')[4].name, '560 Repair & Maintenance', 'same number 560, unique in every company: one account whatever the wording');
+  assert.equal(cb('C')[4].name, '560 Repair & Maintenance');
+  assert.equal(cb('B')[5].name, '539 Laundry & Uniform', 'word order and plural ignored');
+  const merged = buildStatement([
+    L('A', '2026-05', 'Expenses', '503 Staff Payroll', 100, null, '5000 Total Payroll Expenses:5000.1 Payroll Expense:503 Staff Payroll'),
+    L('B', '2026-05', 'Expenses', '503 Staff payroll', 50, null, '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:503 Staff payroll'),
+    L('A', '2026-05', 'Expenses', '650 Management Fees', 10, null, '650 Management Fees'),
+    L('C', '2026-05', 'Expenses', '650 Management Fee', 5, null, '650 Management Fee'),
+  ], { ...office, companies: [{ realmId: 'A', name: 'A' }, { realmId: 'B', name: 'B' }, { realmId: 'C', name: 'C' }] }, sheet, { window: periodWindow('2026-05', 'month'), months: ['2026-05'] });
+  assert.deepEqual(merged.rows.find((r) => r.key === 'staffPayroll').children.map((c) => [c.account, c.period, c.companies]), [['503 Staff Payroll', 150, 2]], 'one line although the parents differ (5000 vs 5000.1)');
+  assert.deepEqual(merged.rows.find((r) => r.key === 'managementFees').children.map((c) => [c.account, c.period, c.companies]), [['650 Management Fees', 15, 2]], 'plural / case differences merge; spelling of the larger line is shown');
   // extends guards
   assert.throws(() => loadOfficesConfig(tmp({ extends: 'config/offices-sheet.json' })), /does not itself extend/);
   assert.throws(() => loadOfficesConfig(tmp({ ...base, cashFlow: { includeLoanPayments: 'yes' } })), /cashFlow.includeLoanPayments/);
@@ -317,28 +355,28 @@ test('balance sheet tree merges the two companies by account path and derives re
   assert.equal(assets.now, liabilities.now + equity.now, 'balances');
 });
 
-test('saved offices: create, move a company between offices, delete, merge with config pairs', async () => {
+test('saved combinations: create, edit, delete; a company may be in several; offices are not replaced', async () => {
   const { openDb } = await import('../server/db.js');
-  const { initOfficesSchema, listSavedOffices, saveOffice, deleteOffice, mergeExplicit } = await import('../server/offices/store.js');
+  const { initOfficesSchema, listSavedOffices, saveOffice, deleteOffice } = await import('../server/offices/store.js');
   const db = openDb(':memory:');
   initOfficesSchema(db);
-  const a = saveOffice(db, { name: 'Dental Office - Bakersfield', city: 'Bakersfield', state: 'CA', companies: ['1', '2'], aliases: ['CA Bakersfield', ''] });
+  const a = saveOffice(db, { name: 'Combined: Bakersfield, Branford', companies: ['1', '2'], aliases: ['CA Bakersfield', ''] });
   assert.deepEqual(a.companies, ['1', '2']);
   assert.deepEqual(a.aliases, ['CA Bakersfield']);
   const b = saveOffice(db, { name: 'Other', companies: ['2', '3'] });
-  assert.deepEqual(listSavedOffices(db).map((s) => s.companies), [['1'], ['2', '3']], 'company 2 moved to the new office');
+  assert.deepEqual(listSavedOffices(db).map((s) => s.companies), [['1', '2'], ['2', '3']], 'company 2 stays in both combinations');
   saveOffice(db, { id: b.id, name: 'Other renamed', companies: ['3'] });
   assert.equal(listSavedOffices(db).find((s) => s.id === b.id).name, 'Other renamed');
-  saveOffice(db, { companies: ['1', '3'] });
-  assert.deepEqual(listSavedOffices(db).map((s) => s.companies), [['1', '3']], 'emptied offices are removed');
   assert.throws(() => saveOffice(db, { companies: [] }), /at least one company/);
   assert.throws(() => saveOffice(db, { id: 999, companies: ['1'] }), /not found/);
-  const explicit = mergeExplicit(listSavedOffices(db), [{ companies: ['1', '9'], city: 'X', state: 'Y', aliases: [] }, { companies: ['7'], aliases: [] }]);
-  assert.deepEqual(explicit.map((o) => o.companies), [['1', '3'], ['9'], ['7']], 'saved offices win; config pair keeps its other company');
-  assert.equal(explicit[0].saved, true);
-  const offices = resolveOffices([{ realmId: '1', officeName: 'A Dental', city: 'Q', state: 'Z' }, { realmId: '3', officeName: 'B subDSO', city: 'Q', state: 'Z' }], { ...testCfg, offices: explicit }, () => 'Dental Companies');
-  assert.equal(offices.length, 1);
-  assert.equal(offices[0].saved, true);
+  const cos = [{ realmId: '1', officeName: 'A Dental', city: 'Q', state: 'Z' }, { realmId: '2', officeName: 'B subDSO', city: 'Q', state: 'Z' }, { realmId: '3', officeName: 'C Dental', city: 'R', state: 'Z' }];
+  const combos = combinedOffices(listSavedOffices(db), cos);
+  assert.deepEqual(combos.map((o) => [o.key, o.name, o.companies.map((c) => c.realmId), o.combined]), [[`combined-${a.id}`, 'Combined: Bakersfield, Branford', ['1', '2'], true], [`combined-${b.id}`, 'Other renamed', ['3'], true]]);
+  assert.equal(combinedOffices(listSavedOffices(db), cos.slice(0, 1)).length, 1, 'only companies the user may see; a combination with none is dropped');
+  const offices = resolveOffices(cos, testCfg, () => 'Dental Companies');
+  assert.equal(offices.length, 2, 'the offices themselves are unaffected by combinations');
+  deleteOffice(db, listSavedOffices(db)[0].id);
+  assert.equal(listSavedOffices(db).length, 1, 'removing one combination leaves the other');
   deleteOffice(db, listSavedOffices(db)[0].id);
   assert.equal(listSavedOffices(db).length, 0);
   assert.throws(() => deleteOffice(db, 123), /not found/);

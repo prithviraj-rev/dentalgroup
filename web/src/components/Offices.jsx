@@ -22,6 +22,21 @@ const Chevron = ({ open }) => (
     <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+/** Month columns grouped as monthly | quarterly | yearly: [{ key, label, months }]. No granularity -> no columns (the period total only). */
+const bucketsOf = (months, gran) => {
+  if (!gran) return [];
+  const map = new Map();
+  for (const m of months) {
+    const q = `Q${Math.ceil(Number(m.slice(5, 7)) / 3)}`;
+    const key = gran === 'year' ? m.slice(0, 4) : gran === 'quarter' ? `${m.slice(0, 4)}-${q}` : m;
+    const label = gran === 'year' ? key : gran === 'quarter' ? `${q} ${m.slice(0, 4)}` : monthLabel(m);
+    if (!map.has(key)) map.set(key, { key, label, months: [] });
+    map.get(key).months.push(m);
+  }
+  return [...map.values()];
+};
+const sumMonths = (map, b) => b.months.reduce((t, m) => t + (map?.[m] || 0), 0);
+const COLUMN_OPTIONS = [['month', 'Monthly'], ['quarter', 'Quarterly'], ['year', 'Yearly']];
 const Money = ({ v, bold }) => <span className={`tabular ${v < 0 ? 'text-bad' : ''} ${bold ? 'font-semibold' : ''}`}>{v == null ? '–' : money(v)}</span>;
 
 export default function Offices({ filters, officeParam, singleOffice, reloadKey, base = 'office-view' }) {
@@ -53,11 +68,9 @@ export default function Offices({ filters, officeParam, singleOffice, reloadKey,
     );
   }
   const combineNow = async (offices) => {
-    const first = offices[0];
-    const saved = offices.filter((o) => o.saved);
-    const pattern = setup.data?.namePattern || 'Dental Office - {city}';
-    const name = first.city ? pattern.replace('{city}', first.city).replace('{state}', first.state || '').replace('{company}', first.companies[0].name) : first.name;
-    const res = await api.officeSave({ id: saved.length === 1 ? saved[0].id : null, name, city: first.city, state: first.state, companies: offices.flatMap((o) => o.companies.map((c) => c.realmId)) }, base);
+    const places = offices.map((o) => o.city || o.name);
+    const name = `Combined: ${places.slice(0, 3).join(', ')}${places.length > 3 ? ` +${places.length - 3}` : ''}`;
+    const res = await api.officeSave({ id: null, name, city: null, state: null, companies: [...new Set(offices.flatMap((o) => o.companies.map((c) => c.realmId)))] }, base);
     setEdits((n) => n + 1);
     if (res?.key) setSelected(res.key); // open the combined office straight away
     return res;
@@ -93,8 +106,8 @@ function CombinePanel({ setup, initial, onClose, onSaved, base = 'office-view' }
     try { await api.officeDelete(id, base); onSaved(); } catch (e) { setErr(e.message); setBusy(false); }
   };
   return (
-    <Section title={form.id ? 'Edit office' : 'Combine companies into one office'}
-      subtitle="Tick the companies that are one practice (the dental company and its sub-DSO). Their income and expenses are then read as one office. A company can be in one office only; ticking it here moves it out of its current office."
+    <Section title={form.id ? 'Edit combined office' : 'Combine companies into one view'}
+      subtitle="Tick the companies to read together. The combination is listed under Combined offices next to the offices, which stay as they are; a company can be in several combinations."
       right={<button type="button" className="control text-sm" onClick={onClose}>Close</button>}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="max-h-[420px] overflow-auto rounded border border-[var(--line)]">
@@ -141,7 +154,7 @@ function CombinePanel({ setup, initial, onClose, onSaved, base = 'office-view' }
               </ul>
             </div>
           )}
-          <p className="text-xs text-muted">Saved offices are kept in the database and override the pairs in config/offices.json. Companies not saved here are paired automatically by city and state.</p>
+          <p className="text-xs text-muted">Combinations are kept in the database and shown on both Offices tabs. The offices themselves come from config/offices.json and the automatic pairing by city and state.</p>
         </div>
       </div>
     </Section>
@@ -173,12 +186,7 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
     try { await onSeparate(id); setNote({ tone: 'good', text: label }); setPicked(new Set()); } catch (e) { setNote({ tone: 'bad', text: e.message }); }
     setBusy(false);
   };
-  const pickedSaved = pickedOffices.length === 1 && pickedOffices[0].saved ? pickedOffices[0] : null;
-  const editPicked = () => {
-    const first = pickedOffices[0];
-    onCombine({ id: first.saved ? first.id : null, name: first.name, city: first.city, state: first.state, companies: first.companies });
-    setPicked(new Set());
-  };
+  const combos = data.combined || [];
   const rows = useMemo(() => {
     const list = flag === 'all' ? data.offices.filter((o) => o.flags.length) : flag ? data.offices.filter((o) => o.flags.some((f) => f.key === flag)) : data.offices;
     return [...list].sort(sorter(sort, (r, c) => (c === 'name' ? r.name : r[c])));
@@ -216,13 +224,11 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
             {onCombineNow && (
               <button type="button" disabled={busy || pickedOffices.length < 2} onClick={combinePicked}
                 className={`h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition-opacity ${pickedOffices.length >= 2 ? 'shadow-md ring-2 ring-[color-mix(in_oklab,var(--series-1)_40%,transparent)]' : 'opacity-40'}`}>
-                {busy ? 'Combining…' : pickedOffices.length >= 2 ? `Combine ${pickedOffices.length} selected into one office` : 'Combine selected'}
+                {busy ? 'Combining…' : pickedOffices.length >= 2 ? `Combine ${pickedOffices.length} selected into one view` : 'Combine selected'}
               </button>
             )}
-            {pickedSaved && onSeparate && <button type="button" className="control text-sm text-bad" disabled={busy} onClick={() => separate(pickedSaved.id, `"${pickedSaved.name}" separated back into its companies.`)}>Separate (undo combine)</button>}
-            {picked.size === 1 && onCombine && <button type="button" className="control text-sm" onClick={editPicked}>Edit this office</button>}
             {picked.size > 0 && <button type="button" className="control text-sm" onClick={() => { setPicked(new Set()); setNote(null); }}>Clear</button>}
-            {note ? <span className={`text-sm ${note.tone === 'bad' ? 'text-bad' : 'text-good'}`}>{note.text}{note.undoId && onSeparate && <> <button type="button" className="ml-1 font-medium text-accent underline" disabled={busy} onClick={() => separate(note.undoId, 'Undone: the companies are separate offices again.')}>Undo</button></>}</span>
+            {note ? <span className={`text-sm ${note.tone === 'bad' ? 'text-bad' : 'text-good'}`}>{note.text}{note.undoId && onSeparate && <> <button type="button" className="ml-1 font-medium text-accent underline" disabled={busy} onClick={() => separate(note.undoId, 'Undone: the combination was removed; the offices were never changed.')}>Undo</button></>}</span>
               : picked.size > 0 ? <span className="text-sm text-ink2">{picked.size} selected{picked.size < 2 ? ' · tick one more to combine' : ''}</span>
               : <span className="text-xs text-muted">{onCombineNow ? 'Tick two or more offices and press Combine. ' : ''}Sorted by {sortLabel}, {sort.dir < 0 ? 'highest' : 'lowest'} first{flag ? ` · ${rows.length} of ${data.offices.length} offices` : ''}.</span>}
           </div>
@@ -250,7 +256,7 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
                   <td className="px-2 py-2">
                     <button type="button" className="text-left font-medium hover:underline" onClick={(e) => { e.stopPropagation(); onOpen(o.key); }}>{o.name}</button>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {o.companies.length > 1 && <Tag title={o.companies.map((c) => c.name).join(' + ')}>{o.companies.length} companies{o.saved ? ' · combined here' : ''}</Tag>}
+                      {o.companies.length > 1 && <Tag title={o.companies.map((c) => c.name).join(' + ')}>{o.companies.length} companies</Tag>}
                       {o.companies.length === 1 && o.companies[0].name !== o.name && <Tag>{o.companies[0].name}</Tag>}
                       {o.flags.map((f) => <Pill key={f.key} tone={f.tone}>{f.label}</Pill>)}
                       {o.lastActivity && o.lastActivity < data.asOf && <span className="text-[10px] uppercase tracking-wide text-muted">Books to {shortMonth(o.lastActivity)}</span>}
@@ -270,6 +276,37 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
           </table>
         </div>
       </Section>
+      {(combos.length > 0 || onCombineNow) && (
+        <Section title={`Combined offices (${combos.length})`} subtitle="Views made by combining offices. The offices above stay as they are and the totals above do not count these.">
+          {combos.length === 0 ? <p className="text-sm text-ink2">None yet. Tick two or more offices above and press Combine.</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="text-xs text-ink2"><tr className="border-b border-[var(--line)]"><th scope="col" className="px-2 py-2 text-left font-medium">Combined office</th><th scope="col" className="px-2 py-2 text-right font-medium">Net collections</th><th scope="col" className="px-2 py-2 text-right font-medium">EBITDA margin</th><th scope="col" className="px-2 py-2 text-right font-medium">Office EBITDA</th><th scope="col" className="px-2 py-2 text-right font-medium">Cash</th><th scope="col" className="px-2 py-2" /></tr></thead>
+                <tbody>
+                  {combos.map((o) => (
+                    <tr key={o.key} className="cursor-pointer border-b border-[var(--line)] hover:bg-page" onClick={() => onOpen(o.key)}>
+                      <td className="px-2 py-2">
+                        <button type="button" className="text-left font-medium hover:underline" onClick={(e) => { e.stopPropagation(); onOpen(o.key); }}>{o.name}</button>
+                        <div className="mt-1 flex flex-wrap gap-1"><Tag title={o.companies.map((c) => c.name).join(' + ')}>{o.companies.length} companies</Tag>{o.companies.slice(0, 6).map((c) => <Tag key={c.realmId}>{c.name}</Tag>)}{o.companies.length > 6 && <Tag>+{o.companies.length - 6} more</Tag>}</div>
+                      </td>
+                      <td className="px-2 py-2 text-right align-top"><Money v={o.netCollections} /></td>
+                      <td className="tabular px-2 py-2 text-right align-top">{pct1(o.ebitdaMargin)}</td>
+                      <td className="px-2 py-2 text-right align-top"><Money v={o.officeEbitda} /></td>
+                      <td className="px-2 py-2 text-right align-top"><Money v={o.cash} /></td>
+                      <td className="px-2 py-2 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                        <span className="flex justify-end gap-2">
+                          {onCombine && <button type="button" className="control text-sm" onClick={() => onCombine({ id: o.id, name: o.name, city: o.city, state: o.state, companies: o.companies })}>Edit</button>}
+                          {onSeparate && <button type="button" className="control text-sm text-bad" disabled={busy} onClick={() => separate(o.id, `"${o.name}" removed. The offices were never changed.`)}>Remove</button>}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+      )}
       <SourceLine source={data.source} />
     </div>
   );
@@ -291,10 +328,13 @@ function Chip({ active, tone, label, count, onClick }) {
 
 function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onCombine, base = 'office-view' }) {
   const { data, loading, error } = useApi(() => api.officeDetail(officeKey, q, base), [officeKey, q.from, q.to, q.office, q.period, reloadKey, base]);
+  const [cols, setCols] = useState(null); // null = the period total only; month | quarter | year adds those columns to both tables
   if (error) return <div className="grid gap-3">{canBack && <BackLink onBack={onBack} />}<ErrorBox title="Could not load this office" error={error} /></div>;
   if (!data) return <Loading />;
   const o = data.office;
   const b = data.badges;
+  const show = (s) => !data.page || data.page.sections.includes(s); // config/offices*.json page.sections
+  const columnsSeg = <Seg label="Columns" small value={cols || ''} options={COLUMN_OPTIONS} onChange={(v) => setCols(v === cols ? null : v)} />;
   return (
     <div className={`grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
       {canBack && <BackLink onBack={onBack} />}
@@ -302,11 +342,12 @@ function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onC
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{o.name}</h2>
+            {o.combined && <Pill tone="info">Combined view</Pill>}
             {o.companies.map((c) => <Tag key={c.realmId} title={c.name}>{c.name}</Tag>)}
           </div>
           <p className="text-sm text-ink2">{data.period.label}{data.period.key !== 'month' ? ` (${monthLabel(data.period.from)} to ${monthLabel(data.period.to)})` : ` ${monthLabel(data.asOf)}`} · Balances as of {monthEndLabel(data.asOf)} · Accrual basis{o.companies.length > 1 ? ` · ${o.companies.length} companies read as one` : ''}</p>
         </div>
-        <div className="flex flex-wrap items-end gap-2">{onCombine && <button type="button" className="control text-sm" onClick={() => onCombine({ id: o.id, name: o.name, city: o.city, state: o.state, companies: o.companies })}>{o.saved ? 'Edit office' : 'Edit companies'}</button>}{periodSeg}</div>
+        <div className="flex flex-wrap items-end gap-2">{onCombine && <button type="button" className="control text-sm" onClick={() => onCombine({ id: o.id, name: o.name, city: o.city, state: o.state, companies: o.companies })}>{o.combined ? 'Edit combination' : 'Combine with…'}</button>}{columnsSeg}{periodSeg}</div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {b.balancesDiffer === 0 && b.balancesMatch > 0 ? <Pill tone="good">Totals tie ✓</Pill> : b.balancesMatch + b.balancesDiffer > 0 ? <Pill tone="warn" title="Ledger balances compared with the CurrentBalance QuickBooks returns on each account">{b.balancesDiffer} of {b.balancesMatch + b.balancesDiffer} balances differ</Pill> : null}
@@ -317,20 +358,22 @@ function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onC
       </div>
       {!data.hasData ? <Empty title="No ledger data for this office in this range">Pick another date range, or run a sync.</Empty> : (
         <>
-          <Tiles cols={6} items={[
+          {show('tiles') && <Tiles cols={6} items={[
             { label: 'Net collections', value: money(o.netCollections), sub: o.vsPrior == null ? 'No prior-year data' : `vs prior year ${signedPct(o.vsPrior)}`, subTone: o.vsPrior == null ? null : o.vsPrior >= 0 ? 'good' : 'bad' },
             { label: 'EBITDA before mgmt fees', value: money(o.ebitdaBeforeFees), bad: o.ebitdaBeforeFees < 0, sub: `Margin ${pct1(o.netCollections ? o.ebitdaBeforeFees / o.netCollections : null)}` },
             { label: 'Office EBITDA', value: money(o.officeEbitda), bad: o.officeEbitda < 0, sub: `Margin ${pct1(o.ebitdaMargin)}` },
             { label: 'Cash', value: money(o.cash), bad: o.cash < 0, sub: `As of ${monthLabel(data.asOf)} month-end` },
             { label: 'Accounts receivable', value: money(o.ar), sub: `As of ${monthLabel(data.asOf)} month-end` },
             { label: 'Accounts payable', value: money(o.ap), sub: `As of ${monthLabel(data.asOf)} month-end` },
-          ]} />
-          <Statement data={data} />
-          {data.pl && <CombinedPl data={data} />}
-          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <BalanceSheet data={data} />
-            <Trends data={data} />
-          </div>
+          ]} />}
+          {show('statement') && <Statement data={data} cols={cols} />}
+          {show('pl') && data.pl && <CombinedPl data={data} cols={cols} />}
+          {(show('balanceSheet') || show('trends')) && (
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              {show('balanceSheet') && <BalanceSheet data={data} />}
+              {show('trends') && <Trends data={data} />}
+            </div>
+          )}
         </>
       )}
       <SourceLine source={data.source} />
@@ -342,21 +385,23 @@ const BackLink = ({ onBack }) => <button type="button" className="inline-flex w-
 
 const ROLE_STYLE = { feesSubtotal: 'subtotal', ebitda: 'subtotal', cashFlow: 'subtotal', collections: 'head', fees: 'plain' };
 
-function Statement({ data }) {
+function Statement({ data, cols = null }) {
+  const showMemo = data.page?.memo !== false; // config page.memo
   const [open, setOpen] = useState({});
   const [all, setAll] = useState(false);
   const narrow = useNarrow();
-  const months = narrow ? [] : data.months; // phones: the period and prior-year columns only
+  const buckets = narrow ? [] : bucketsOf(data.months, cols); // phones: the period column only
   const rows = data.statement.rows;
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const isOpen = (k) => (all ? open[k] !== false : Boolean(open[k]));
   const priorLabel = data.period.key === 'month' ? monthLabel(data.period.priorTo) : `${monthLabel(data.period.priorFrom)} – ${monthLabel(data.period.priorTo)}`;
   const periodLabel = data.period.key === 'month' ? monthLabel(data.period.to) : data.period.label;
   const ip = data.statement.internalPeriod;
+  const csvCols = bucketsOf(data.months, cols || 'month');
   const exportCsv = () => downloadCsv(`office-${data.office.key}-${data.asOf}.csv`, [
-    ['Row', 'Account', ...data.months, `Period ${periodLabel}`, `Prior year ${priorLabel}`],
-    ...rows.flatMap((r) => [[r.label, '', ...data.months.map((m) => r.months[m]), r.period, r.prior], ...r.children.map((c) => ['', c.fullName, ...data.months.map((m) => c.months[m] || 0), c.period, c.prior])]),
-    ...data.statement.memo.flatMap((r) => [[`Memo: ${r.label}`, '', ...data.months.map((m) => r.months[m]), r.period, r.prior], ...r.children.map((c) => ['', c.fullName, ...data.months.map((m) => c.months[m] || 0), c.period, c.prior])]),
+    ['Row', 'Account', ...csvCols.map((b) => b.label), `Period ${periodLabel}`, `Prior year ${priorLabel}`],
+    ...rows.flatMap((r) => [[r.label, '', ...csvCols.map((b) => sumMonths(r.months, b)), r.period, r.prior], ...r.children.map((c) => ['', c.fullName, ...csvCols.map((b) => sumMonths(c.months, b)), c.period, c.prior])]),
+    ...data.statement.memo.flatMap((r) => [[`Memo: ${r.label}`, '', ...csvCols.map((b) => sumMonths(r.months, b)), r.period, r.prior], ...r.children.map((c) => ['', c.fullName, ...csvCols.map((b) => sumMonths(c.months, b)), c.period, c.prior])]),
   ]);
   const cell = (v, bold) => <td className={`whitespace-nowrap px-2 py-1.5 text-right ${bold ? 'font-semibold' : ''}`}><Money v={v} bold={bold} /></td>;
   const line = (r, depth, key, expandable, sub, memoSign) => {
@@ -373,9 +418,8 @@ function Statement({ data }) {
           ) : <span className={`${bold ? 'font-semibold' : ''} ${depth ? 'text-xs' : ''}`} title={sub || undefined}>{r.label}{r.companies > 1 ? <span className="ml-1 text-[10px] text-muted">×{r.companies}</span> : null}</span>}
           {memoSign != null && !depth && <span className="ml-2 text-[10px] text-muted">{memoSign > 0 ? 'income' : 'expense'}</span>}
         </th>
-        {months.map((m) => cell(r.months[m] ?? 0, bold))}
+        {buckets.map((b) => <React.Fragment key={b.key}>{cell(sumMonths(r.months, b), bold)}</React.Fragment>)}
         <td className={`whitespace-nowrap bg-page px-2 py-1.5 text-right ${bold ? 'font-semibold' : ''}`}><Money v={r.period} bold={bold} /></td>
-        <td className={`whitespace-nowrap bg-page px-2 py-1.5 text-right ${bold ? 'font-semibold' : ''}`}><Money v={r.prior} bold={bold} /></td>
       </tr>
     );
   };
@@ -387,27 +431,35 @@ function Statement({ data }) {
   };
   return (
     <Section title="Office statement" subtitle={`${monthLabel(data.months[0])} to ${monthLabel(data.months.at(-1))} · Accrual basis · Expand a row to see the QuickBooks accounts behind it${data.office.companies.length > 1 ? ', both companies merged by account' : ''}.`}
-      right={<div className="flex gap-2"><button type="button" className="control text-sm" onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button><button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button></div>}>
+      right={<button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button>}>
       <div className="max-h-[640px] overflow-auto">
-        <table className="w-full text-sm" style={{ minWidth: narrow ? 0 : 320 + months.length * 96 }}>
+        <table className="w-full text-sm" style={{ minWidth: narrow ? 0 : 320 + buckets.length * 96 }}>
           <thead className="sticky top-0 z-[2] bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
             <tr>
-              <th scope="col" className="sticky left-0 z-[3] bg-surface px-2 py-2 text-left font-medium">Account</th>
-              {months.map((m) => <th key={m} scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium">{narrow ? shortMonth(m) : monthLabel(m)}</th>)}
+              <th scope="col" className="sticky left-0 z-[3] bg-surface px-2 py-2 text-left font-medium">
+                <span className="flex items-center gap-3">Account
+                  <button type="button" className="rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={all} onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button>
+                </span>
+              </th>
+              {buckets.map((b) => <th key={b.key} scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium">{b.label}</th>)}
               <th scope="col" className="whitespace-nowrap bg-page px-2 py-2 text-right font-medium"><div>{data.period.key === 'month' ? 'Month' : data.period.label}</div><div className="font-normal text-muted">{periodLabel}</div></th>
-              <th scope="col" className="whitespace-nowrap bg-page px-2 py-2 text-right font-medium"><div>Prior year</div><div className="font-normal text-muted">{priorLabel}</div></th>
             </tr>
           </thead>
           <tbody>
             {rows.flatMap((r) => block(r, ''))}
-            {data.statement.memo.length > 0 && (
-              <tr className="border-t border-[var(--line)]"><th scope="row" colSpan={months.length + 3} className="sticky left-0 bg-surface px-2 pb-1 pt-4 text-left text-[11px] font-medium uppercase tracking-wide text-muted">Not in the rows above</th></tr>
+            {showMemo && data.statement.memo.length > 0 && (
+              <tr className="border-t border-[var(--line)]"><th scope="row" colSpan={buckets.length + 2} className="sticky left-0 bg-surface px-2 pb-1 pt-4 text-left text-[11px] font-medium uppercase tracking-wide text-muted">Not in the rows above</th></tr>
             )}
-            {data.statement.memo.flatMap((r) => block(r, 'memo:', r.sign))}
+            {showMemo && data.statement.memo.flatMap((r) => block(r, 'memo:', r.sign))}
           </tbody>
         </table>
       </div>
-      {(ip.expense > 0 || ip.income > 0) && (
+      {!showMemo && data.statement.memo.length > 0 && (
+        <p className="mt-3 text-xs text-muted">
+          Not in the sheet, left out of this statement ({periodLabel}): {data.statement.memo.filter((m) => Math.abs(m.period) >= 0.5).map((m) => `${m.label.replace(/ \(.*\)$/, '')} ${money(m.period)}`).join(' · ')}.
+        </p>
+      )}
+      {showMemo && (ip.expense > 0 || ip.income > 0) && (
         <p className="mt-3 text-xs text-muted">
           Internal charges between the companies of this office in the period: {money(ip.expense)} charged, {money(ip.income)} received, {money(ip.matched)} removed from both sides.
           {Math.abs(ip.expense - ip.income) > 0.5 && <> The difference stays in the figures and is listed under “Internal charges not matched”.</>} Rules: config/offices.json.
@@ -485,39 +537,57 @@ const PL_ORDER = [
   { subtotal: 'netIncome', label: 'Net Income', bold: true },
 ];
 
-function CombinedPl({ data }) {
+function CombinedPl({ data, cols: gran = null }) {
   const [view, setView] = useState('months');
+  const [values, setValues] = useState('amount'); // amount | pct (% of income, as on the QuickBooks report)
   const [open, setOpen] = useState({});
+  const [all, setAll] = useState(true); // QuickBooks shows the report fully expanded
   const narrow = useNarrow();
-  const pl = data.pl[view];
+  // Month columns folded into the chosen granularity (none = the total only); the Companies view keeps one column per company.
+  const monthsView = useMemo(() => {
+    const src = data.pl.months;
+    const buckets = bucketsOf(src.buckets.map((b) => b.key), gran);
+    const agg = (periods) => Object.fromEntries(buckets.map((b) => [b.key, sumMonths(periods, b)]));
+    const node = (n) => ({ ...n, periods: agg(n.periods), own: agg(n.own), children: n.children.map(node) });
+    return {
+      ...src, buckets,
+      types: src.types.map((t) => ({ ...t, periods: agg(t.periods), nodes: t.nodes.map(node) })),
+      subtotals: Object.fromEntries(Object.entries(src.subtotals).map(([k, v]) => [k, { periods: agg(v.periods), total: v.total }])),
+    };
+  }, [data.pl, gran]);
+  const pl = view === 'months' ? monthsView : data.pl.companies;
   const cols = narrow ? [] : pl.buckets;
-  const colLabel = (b) => (view === 'months' ? shortMonth(b.key) : b.label);
-  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+  const colLabel = (b) => b.label;
+  // Expand all / Collapse all folds or opens every section and account, except the Income section, which stays open.
+  // A click on any row still toggles that row by hand.
+  const isOpen = (k) => (k === 'type:Income' || all ? open[k] !== false : Boolean(open[k]));
+  const toggle = (k, depth = 2) => setOpen((o) => ({ ...o, [k]: !isOpen(k, depth) }));
   const types = Object.fromEntries(pl.types.map((t) => [t.accountType, t]));
+  const income = types.Income || { periods: {}, total: 0 };
+  const show = (v, den) => (v == null ? '–' : values === 'pct' ? (den ? pct1(v / den) : '–') : money(v));
   const totalLabel = data.period.key === 'month' && view === 'months' ? `${monthLabel(data.months[0])} – ${monthLabel(data.months.at(-1))}` : `${monthLabel(data.months[0])} – ${monthLabel(data.months.at(-1))}`;
-  const cell = (v, bold) => <td className={`tabular whitespace-nowrap px-2 py-1.5 text-right ${v < 0 ? 'text-bad' : ''} ${!v ? 'text-muted' : ''} ${bold ? 'font-semibold' : ''}`}>{v == null ? '–' : money(v)}</td>;
-  const line = (key, label, periods, total, { depth = 0, bold = false, expandable = false, isOpen = false, style = 'plain', companies = 0 } = {}) => (
-    <tr key={key} className={`border-t border-[var(--line)] ${style === 'subtotal' ? 'bg-[color-mix(in_oklab,var(--good)_8%,var(--surface))]' : style === 'head' ? 'bg-page' : ''}`}>
+  const cell = (v, bold, den, blank) => <td className={`tabular whitespace-nowrap px-2 py-1.5 text-right ${v < 0 ? 'text-bad' : ''} ${!v ? 'text-muted' : ''} ${bold ? 'font-semibold' : ''}`}>{blank ? '' : show(v, den)}</td>;
+  const line = (key, label, periods, total, { depth = 0, bold = false, expandable = false, isOpen = false, style = 'plain', companies = 0, blank = false, level = depth } = {}) => (
+    <tr key={key} className={`border-t border-[var(--line)] ${style === 'subtotal' ? 'bg-[color-mix(in_oklab,var(--good)_8%,var(--surface))]' : style === 'head' ? 'bg-page' : style === 'total' ? 'bg-[color-mix(in_oklab,var(--ink)_3%,var(--surface))]' : ''}`}>
       <th scope="row" className={`sticky left-0 z-[1] whitespace-nowrap px-2 py-1.5 text-left ${bold ? 'font-semibold' : 'font-normal'} ${style === 'subtotal' ? 'bg-[color-mix(in_oklab,var(--good)_8%,var(--surface))] text-good' : style === 'head' ? 'bg-page' : 'bg-surface'}`} style={{ paddingLeft: 8 + depth * 16 }}>
         {expandable ? (
-          <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={isOpen} onClick={() => toggle(key)}>
+          <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={isOpen} onClick={() => toggle(key, level)}>
             <Chevron open={isOpen} />{label}{companies > 1 ? <span className="ml-1 text-[10px] text-muted">×{companies}</span> : null}
           </button>
         ) : <span className="inline-flex items-center gap-1"><span className="w-[14px] shrink-0" aria-hidden="true" />{label}{companies > 1 ? <span className="ml-1 text-[10px] text-muted">×{companies}</span> : null}</span>}
       </th>
-      {cols.map((b) => <React.Fragment key={b.key}>{cell(periods[b.key], bold)}</React.Fragment>)}
-      <td className={`tabular whitespace-nowrap bg-page px-2 py-1.5 text-right ${total < 0 ? 'text-bad' : ''} ${bold || style === 'subtotal' ? 'font-semibold' : 'font-medium'} ${style === 'subtotal' ? 'text-good' : ''}`}>{money(total)}</td>
+      {cols.map((b) => <React.Fragment key={b.key}>{cell(periods[b.key], bold, income.periods[b.key], blank)}</React.Fragment>)}
+      <td className={`tabular whitespace-nowrap bg-page px-2 py-1.5 text-right ${total < 0 ? 'text-bad' : ''} ${bold || style === 'subtotal' ? 'font-semibold' : 'font-medium'} ${style === 'subtotal' ? 'text-good' : ''}`}>{blank ? '' : show(total, income.total)}</td>
     </tr>
   );
   const node = (n, depth, prefix) => {
     const k = `${prefix}${n.key}`;
     const expandable = n.children.length > 0;
-    const isOpen = Boolean(open[k]);
-    const out = [line(k, n.name, n.periods, n.total, { depth, expandable, isOpen, companies: n.companies })];
-    if (expandable && isOpen) {
-      if (Math.abs(n.ownTotal) >= 0.005 || Object.values(n.own).some((v) => v)) out.push(line(`${k}:own`, `${n.name} (itself)`, n.own, n.ownTotal, { depth: depth + 1 }));
-      for (const c of n.children) out.push(...node(c, depth + 1, `${k}/`));
-    }
+    if (!expandable || !isOpen(k, depth)) return [line(k, n.name, n.periods, n.total, { depth, expandable, isOpen: false, companies: n.companies })];
+    const hasOwn = Math.abs(n.ownTotal) >= 0.005 || Object.values(n.own).some((v) => v);
+    const out = [line(k, n.name, n.own, n.ownTotal, { depth, expandable, isOpen: true, companies: n.companies, blank: !hasOwn })];
+    for (const c of n.children) out.push(...node(c, depth + 1, `${k}/`));
+    out.push(line(`${k}:total`, `Total for ${n.name}`, n.periods, n.total, { depth, bold: true, style: 'total' }));
     return out;
   };
   const rows = [];
@@ -526,9 +596,11 @@ function CombinedPl({ data }) {
       const t = types[item.type];
       if (!t || !t.nodes.length) continue;
       const k = `type:${item.type}`;
-      const isOpen = open[k] !== false;
-      rows.push(line(k, t.label, t.periods, t.total, { bold: true, expandable: true, isOpen, style: 'head' }));
-      if (isOpen) for (const n of t.nodes) rows.push(...node(n, 1, `${k}/`));
+      if (isOpen(k, 0)) {
+        rows.push(line(k, t.label, t.periods, t.total, { bold: true, expandable: true, isOpen: true, style: 'head', blank: true, level: 0 }));
+        for (const n of t.nodes) rows.push(...node(n, 1, `${k}/`));
+        rows.push(line(`${k}:total`, `Total ${t.label}`, t.periods, t.total, { bold: true, style: 'total' }));
+      } else rows.push(line(k, t.label, t.periods, t.total, { bold: true, expandable: true, isOpen: false, style: 'head', level: 0 }));
     } else {
       const s = pl.subtotals[item.subtotal];
       rows.push(line(`sub:${item.subtotal}`, item.label, s.periods, s.total, { bold: true, style: 'subtotal' }));
@@ -546,12 +618,16 @@ function CombinedPl({ data }) {
   return (
     <Section title="Combined profit and loss"
       subtitle={`${data.office.companies.length > 1 ? `${data.office.companies.map((c) => c.name).join(' + ')} as one. ` : ''}Accounts merged by section, type and account name; sub-accounts merge only under the same parent. As booked in QuickBooks (internal charges not removed, payroll taxes not split). Accrual basis.`}
-      right={<div className="flex flex-wrap items-end gap-2"><Seg small value={view} onChange={setView} options={[['months', 'Months'], ['companies', 'Companies']]} /><button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button></div>}>
+      right={<div className="flex flex-wrap items-end gap-2"><Seg small value={view} onChange={setView} options={[['months', 'Months'], ['companies', 'Companies']]} /><Seg small value={values} onChange={setValues} options={[['amount', 'Amounts'], ['pct', '% of income']]} /><button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button></div>}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth: narrow ? 0 : 300 + cols.length * 96 }}>
           <thead className="text-xs text-ink2">
             <tr className="border-b border-[var(--line)]">
-              <th scope="col" className="sticky left-0 z-[3] bg-surface px-2 py-2 text-left font-medium">Account</th>
+              <th scope="col" className="sticky left-0 z-[3] bg-surface px-2 py-2 text-left font-medium">
+                <span className="flex items-center gap-3">Account
+                  <button type="button" className="rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={all} onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button>
+                </span>
+              </th>
               {cols.map((b) => <th key={b.key} scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium" title={b.label}>{colLabel(b)}</th>)}
               <th scope="col" className="whitespace-nowrap bg-page px-2 py-2 text-right font-medium"><div>Total</div><div className="font-normal text-muted">{totalLabel}</div></th>
             </tr>

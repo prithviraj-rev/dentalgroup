@@ -60,6 +60,19 @@ export function resolveOffices(companies, cfg, categoryOf = () => null) {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Combined offices the user saved (Combine on the Offices tab): extra views over several companies, shown next to the
+ * offices, never replacing them. saved: listSavedOffices(); companies: as for resolveOffices (what the user may see).
+ */
+export function combinedOffices(saved, companies) {
+  const byId = Object.fromEntries(companies.map((c) => [c.realmId, c]));
+  return saved.map((s) => {
+    const present = s.companies.filter((id) => byId[id]).map((id) => ({ realmId: id, name: byId[id].officeName, city: byId[id].city, state: byId[id].state }));
+    if (!present.length) return null;
+    return { key: `combined-${s.id}`, name: s.name || present.map((c) => c.name).join(' + '), city: s.city || null, state: s.state || null, companies: present, aliases: s.aliases || [], explicit: false, id: s.id, saved: true, combined: true };
+  }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // ---------- Periods ----------
 
 /** The KPI window ending at asOf (YYYY-MM) and the same window a year earlier. */
@@ -135,17 +148,68 @@ export function classifyLine(r, cfg) {
   if (matchAcct(cfg.notOperating, r)) return { kind: 'memo', key: 'notOperating' };
   if (matchAcct(cfg.payrollTaxes.re, r)) return { kind: 'tax', key: 'payrollTaxes' };
   for (const row of cfg.rows) if ((row.role === 'cost' || row.role === 'fees') && matchAcct(row.re, r)) return { kind: 'row', key: row.key };
-  return { kind: 'row', key: cfg.rows.find((x) => x.role === 'other').key };
+  const other = cfg.rows.find((x) => x.role === 'other');
+  // An "other" row with its own account pattern takes only those accounts; the rest is not in any row (memo).
+  return other.re && !matchAcct(other.re, r) ? { kind: 'memo', key: 'unassigned' } : { kind: 'row', key: other.key };
 }
 
 export const MEMO = [
   ['otherIncome', 'Other income (non-operating)', 1],
   ['unassignedIncome', 'Income not assigned to a row', 1],
+  ['unassigned', 'Expenses not assigned to a row', -1],
   ['notOperating', 'Depreciation, amortization & interest', -1],
   ['profitTransfers', 'Profit transfers (not a cost of the office)', -1],
   ['internalIncome', 'Internal income not matched (charged to the other company, not patient collections)', 1],
   ['internalUnmatched', 'Internal charges not matched (paid to the other company)', -1],
 ];
+
+// ---------- One spelling per account across the companies of an office ----------
+
+/** "650 Management Fees", "650 Management fee" and "650 Management Fee" -> the same key (case, spacing, punctuation, "and" and plural ignored; word order too). */
+export const normKey = (s) => String(s).toLowerCase().replace(/[^a-z0-9.]+/g, ' ').trim().split(' ')
+  .filter((w) => w && w !== 'and').map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w)).sort().join(' ');
+const numberOf = (seg) => (String(seg).match(/^(\d+(?:\.\d+)*[a-z]?)(?=\s|$)/i) || [])[1] || null;
+
+/**
+ * Wrap an account book so every path segment uses one spelling across the given companies. Segments are the same
+ * account when their names match (normKey), or when they carry the same account number and no company uses that
+ * number for two different accounts (so 560 "Repairs & Maintenance" = 560 "Repairs and Maintenance", but the two
+ * 503 accounts stay apart). The spelling most companies use wins (ties: capitalised / shorter first).
+ */
+export function canonicalBook(book, realmIds) {
+  const perCompany = new Map(); // realmId -> Map(number -> Set(normKey))
+  const segs = []; // [realmId, segment]
+  for (const id of realmIds) {
+    const nums = new Map();
+    for (const a of Object.values(book(id))) {
+      for (const seg of String(a.fullName || a.name).split(':')) {
+        const s = seg.trim();
+        segs.push([id, s]);
+        const n = numberOf(s);
+        if (n) { if (!nums.has(n)) nums.set(n, new Set()); nums.get(n).add(normKey(s)); }
+      }
+    }
+    perCompany.set(id, nums);
+  }
+  const numberUnique = (n) => [...perCompany.values()].every((nums) => (nums.get(n)?.size || 0) <= 1);
+  const keyOf = (s) => { const n = numberOf(s); return n && numberUnique(n) ? `#${n}` : normKey(s); };
+  const spell = new Map(); // key -> Map(spelling -> number of accounts using it)
+  for (const [, s] of segs) {
+    const k = keyOf(s);
+    const m = spell.get(k) || new Map();
+    m.set(s, (m.get(s) || 0) + 1);
+    spell.set(k, m);
+  }
+  const canon = (seg) => {
+    const m = spell.get(keyOf(seg));
+    return m ? [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0] : seg;
+  };
+  const cache = {};
+  return (id) => (cache[id] ||= Object.fromEntries(Object.entries(book(id)).map(([k, a]) => {
+    const parts = String(a.fullName || a.name).split(':').map((s) => canon(s.trim()));
+    return [k, { ...a, name: canon(String(a.name).trim()), fullName: parts.join(':') }];
+  })));
+}
 
 // ---------- Statement ----------
 
@@ -167,10 +231,10 @@ export function mainAccount(r) {
 export function matchedAccount(r, re) {
   if (re) {
     const parts = String(r.fullName || r.account).split(':').map((s) => s.trim());
-    for (let i = 0; i < parts.length; i++) {
-      const prefix = parts.slice(0, i + 1).join(':');
-      if (re.test(parts[i]) || re.test(prefix)) return [parts[i], prefix];
-    }
+    // Deepest level whose own name matches (a rule on 503.1 shows 503.1, not the "Dentist" sub-account under it and not
+    // the "503 Contract Labor" parent); else the shallowest level whose path matches.
+    for (let i = parts.length - 1; i >= 0; i--) if (re.test(parts[i])) return [parts[i], parts.slice(0, i + 1).join(':')];
+    for (let i = 0; i < parts.length; i++) { const prefix = parts.slice(0, i + 1).join(':'); if (re.test(prefix)) return [parts[i], prefix]; }
   }
   return mainAccount(r);
 }
@@ -192,7 +256,7 @@ export function buildStatement(lines, office, cfg, { window, months, cashFlow = 
   const childAdd = (slot, r, amt, re = null) => {
     const mode = cfg.statement.rollUpSubAccounts;
     const [account, fullName] = mode === 'matched' ? matchedAccount(r, re) : mode ? mainAccount(r) : [r.account, r.fullName || r.account];
-    const k = fullName;
+    const k = normKey(account); // one line per account name, however the companies spell or nest it
     const c = slot.children.get(k) || { account, fullName, companies: new Set(), months: {} };
     c.companies.add(r.realmId);
     add(c.months, r.month, amt);

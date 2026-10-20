@@ -373,7 +373,7 @@
     "enabled": true,
     "file": "config/offices-sheet.json",
     "apiPath": "office-sheet",
-    "label": "Offices (client sheet)"
+    "label": "Financial KPIs"
   },
   "practiceKpis": {
     "$comment": "Practice KPIs tab: production, collections, visits, new patients ... imported from the practice-management system (CSV upload or POST /api/practice-kpis) and combined with the P&L. Metrics and column matching in the file below.",

@@ -40,7 +40,7 @@ const APP_CONFIG_DEFAULTS = {
   finance: { enabled: true, file: 'config/finance.json' },
   practiceKpis: { enabled: true, file: 'config/practice-kpis.json' },
   offices: { enabled: true, file: 'config/offices.json' },
-  officesSheet: { enabled: true, file: 'config/offices-sheet.json', apiPath: 'office-sheet', label: 'Offices (client sheet)' },
+  officesSheet: { enabled: true, file: 'config/offices-sheet.json', apiPath: 'office-sheet', label: 'Financial KPIs' },
   rawSync: { file: 'config/raw-sync.json' },
   officeChart: { enabled: true, maxOffices: 8, metric: 'netIncome' },
   charts: {

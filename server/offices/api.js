@@ -4,8 +4,8 @@
 import { Router } from 'express';
 import { loadCategories, assignCategories } from '../categories.js';
 import { loadOfficesConfig, PERIODS } from './config.js';
-import { initOfficesSchema, listSavedOffices, saveOffice, deleteOffice, mergeExplicit } from './store.js';
-import { resolveOffices, periodWindow, buildStatement, flagsFor, balanceTree, FLAGS, MEMO } from './offices.js';
+import { initOfficesSchema, listSavedOffices, saveOffice, deleteOffice } from './store.js';
+import { resolveOffices, combinedOffices, periodWindow, buildStatement, flagsFor, balanceTree, canonicalBook, FLAGS, MEMO } from './offices.js';
 import { analyze, metricDefs } from './analysis.js';
 import { officePl, monthlyPl } from './pl.js';
 import { accountBook, ledgerBalances, ledgerCashFlow, rawStatus, GRP_OF_TYPE, monthEnd } from '../raw/data.js';
@@ -69,12 +69,18 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     const asOf = cfg.periods.asOf === 'lastFullMonth' && f.to >= thisMonth && f.from < f.to ? addMonths(f.to, -1) : f.to; // the current month is not finished
     return { ...f, period, asOf, window: periodWindow(asOf, period, cfg.periods.fiscalYearStartMonth) };
   };
-  /** Offices visible for the request: all in scope, narrowed to those containing a selected company. */
+  /** Offices visible for the request: all in scope (config pairs + automatic pairing), narrowed to those containing a selected company. */
   const officesOf = (req, f) => {
     const companies = companiesInScope(req.dashboardScope);
-    let offices = resolveOffices(companies, { ...cfg, offices: mergeExplicit(listSavedOffices(db), cfg.offices) }, categoryOf(companies));
+    let offices = resolveOffices(companies, cfg, categoryOf(companies));
     if (f.offices) offices = offices.filter((o) => o.companies.some((c) => f.offices.includes(c.realmId)));
     return offices;
+  };
+  /** Combined offices the user saved, as extra views next to the offices (same scoping). */
+  const combosOf = (req, f) => {
+    let combos = combinedOffices(listSavedOffices(db), companiesInScope(req.dashboardScope));
+    if (f.offices) combos = combos.filter((o) => o.companies.some((c) => f.offices.includes(c.realmId)));
+    return combos;
   };
   const idsOf = (offices) => offices.flatMap((o) => o.companies.map((c) => c.realmId));
   const sourceOf = (ids, book) => {
@@ -112,7 +118,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
       lastChange: srcs.map((s) => s.lastChange).filter(Boolean).sort()[0] || null, lastActivity: act, pullErrors: srcs.some((s) => s.errors > 0),
     }, cfg, { asOf: f.asOf });
     return {
-      key: o.key, name: o.name, city: o.city, state: o.state, id: o.id, saved: o.saved, companies: o.companies.map((c) => ({ realmId: c.realmId, name: c.name })),
+      key: o.key, name: o.name, city: o.city, state: o.state, id: o.id, saved: o.saved, combined: Boolean(o.combined), companies: o.companies.map((c) => ({ realmId: c.realmId, name: c.name })),
       netCollections: coll.period, priorNetCollections: coll.prior, vsPrior: coll.prior > 0 ? round2((coll.period - coll.prior) / coll.prior * 10000) / 10000 : null,
       ebitdaBeforeFees: before.period, managementFees: fees.period, officeEbitda: ebitda.period, ebitdaMargin: coll.period ? round2(ebitda.period / coll.period * 10000) / 10000 : null,
       operatingCashFlow: cf ? cf.period : null,
@@ -138,7 +144,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
   const canManage = (req) => !req.dashboardScope || Boolean(req.dashboardScope.canManage);
   router.get(`${P}/setup`, wrap((req) => {
     const companies = companiesInScope(req.dashboardScope);
-    const offices = resolveOffices(companies, { ...cfg, offices: mergeExplicit(listSavedOffices(db), cfg.offices) }, categoryOf(companies));
+    const offices = resolveOffices(companies, cfg, categoryOf(companies));
     const officeOf = {};
     for (const o of offices) for (const c of o.companies) officeOf[c.realmId] = { key: o.key, name: o.name, saved: o.saved, id: o.id };
     const cat = categoryOf(companies);
@@ -154,10 +160,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     const companies = (req.body?.companies || []).map(String);
     if (companies.some((c) => !allowed.has(c))) throw httpError(403, 'A company is not in your organization.');
     const saved = saveOffice(db, { id: req.body?.id, name: req.body?.name, city: req.body?.city, state: req.body?.state, companies, aliases: req.body?.aliases });
-    // The office key the page can open straight away.
-    const all = companiesInScope(req.dashboardScope);
-    const office = resolveOffices(all, { ...cfg, offices: mergeExplicit(listSavedOffices(db), cfg.offices) }, categoryOf(all)).find((o) => o.id === saved.id);
-    return { ...saved, key: office?.key || null };
+    return { ...saved, key: `combined-${saved.id}` }; // the key the page opens straight away
   }));
   router.delete(`${P}/setup/:id`, wrap((req) => {
     if (!canManage(req)) throw httpError(403, 'Your role does not allow changing offices.');
@@ -169,9 +172,14 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     const f = filtersOf(req);
     const offices = officesOf(req, f);
     const ids = idsOf(offices);
-    const book = accountBook(db);
+    const book = canonicalBook(accountBook(db), ids); // one spelling per account across the office's companies
     const ctx = context(ids, f, book);
     const rows = offices.map((o) => officeFigures(o, f, ctx)).filter((o) => o.hasData || o.cash != null);
+    // Combined offices (user-made views) are listed separately and never counted in the totals or flags.
+    const combos = combosOf(req, f);
+    const comboIds = idsOf(combos).filter((id) => !ids.includes(id));
+    const comboCtx = comboIds.length ? context([...ids, ...comboIds], f, canonicalBook(accountBook(db), [...ids, ...comboIds])) : ctx;
+    const combined = combos.map((o) => officeFigures(o, f, comboCtx)).map(({ statement: _s, row: _r, ...o }) => ({ ...o, combined: true }));
     const tot = { netCollections: 0, priorNetCollections: 0, officeEbitda: 0, cash: 0, ar: 0 };
     for (const r of rows) { tot.netCollections += r.netCollections; tot.priorNetCollections += r.priorNetCollections; tot.officeEbitda += r.officeEbitda; tot.cash += r.cash || 0; tot.ar += r.ar || 0; }
     const flagCounts = FLAGS.map(([key, label, tone]) => ({ key, label, tone, count: rows.filter((r) => r.flags.some((x) => x.key === key)).length })).filter((x) => x.count);
@@ -181,6 +189,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
       totals: { ...Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, round2(v)])), vsPrior: tot.priorNetCollections > 0 ? (tot.netCollections - tot.priorNetCollections) / tot.priorNetCollections : null, ebitdaMargin: tot.netCollections ? tot.officeEbitda / tot.netCollections : null, flagged: rows.filter((r) => r.flags.length).length },
       flags: flagCounts,
       offices: rows.map(({ statement: _s, row: _r, ...o }) => o),
+      combined,
       hasData: rows.length > 0,
       source: (({ byCompany, ...s }) => s)(ctx.source),
     };
@@ -189,10 +198,10 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
   // ---------- One office ----------
   router.get(`${P}/:key`, wrap((req) => {
     const f = filtersOf(req);
-    const o = officesOf(req, f).find((x) => x.key === req.params.key);
+    const o = [...officesOf(req, f), ...combosOf(req, f)].find((x) => x.key === req.params.key);
     if (!o) throw httpError(404, 'Office not found');
     const ids = o.companies.map((c) => c.realmId);
-    const book = accountBook(db);
+    const book = canonicalBook(accountBook(db), ids); // one spelling per account across the office's companies
     const ctx = context(ids, f, book, { trend: true });
     const fig = officeFigures(o, f, ctx);
     const { statement, row, ...head } = fig;
@@ -210,7 +219,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
       return { month: m, netCollections: round2(statement.all.collections[m] || 0), officeEbitda: round2(statement.all.officeEbitda[m] || 0), cash, revenue: booked[m].revenue, netIncome: booked[m].netIncome };
     });
     // Combined profit and loss as booked: accounts merged by section, type and account path; by month and by company.
-    const pl = officePl({ companies: o.companies, book, lines: ctx.lines, months: ctx.months });
+    const pl = cfg.page.sections.includes('pl') ? officePl({ companies: o.companies, book, lines: ctx.lines, months: ctx.months }) : null;
     const srcs = ids.map((id) => ctx.source.byCompany[id]).filter(Boolean);
     return {
       office: head, asOf: f.asOf, to: f.to, from: f.from, months: ctx.months, period: periodsOut(f),
@@ -223,6 +232,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
       balanceSheet: { asOf: f.asOf, prior: f.window.priorTo, sections },
       pl,
       trend,
+      page: cfg.page,
       hasData: fig.hasData,
       source: (({ byCompany, ...s }) => s)(ctx.source),
     };
@@ -245,7 +255,7 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     const companies = companiesInScope(req.dashboardScope);
     const offices = officesOf(req, f);
     const ids = idsOf(offices);
-    const book = accountBook(db);
+    const book = canonicalBook(accountBook(db), ids); // one spelling per account across the office's companies
     const ctx = context(ids, f, book);
     const statements = new Map();
     const statementOf = (o) => {

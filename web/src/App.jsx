@@ -21,7 +21,7 @@ const TABS = [
   { id: 'analysis', label: 'Analysis', enabled: (c) => c.analysis?.enabled !== false && c.offices?.enabled !== false },
   { id: 'categories', label: 'Category compare', enabled: (c) => c.categoryView?.enabled !== false },
   { id: 'offices', label: 'Offices', enabled: (c) => c.offices?.enabled !== false },
-  { id: 'officesSheet', label: (c) => c.officesSheet?.label || 'Offices (client sheet)', enabled: (c) => c.offices?.enabled !== false && c.officesSheet?.enabled !== false },
+  { id: 'officesSheet', label: (c) => c.officesSheet?.label || 'Financial KPIs', enabled: (c) => c.offices?.enabled !== false && c.officesSheet?.enabled !== false },
   { id: 'group', label: 'Group overview', enabled: (c) => c.groupOverview?.enabled !== false },
   { id: 'cash', label: 'Cash & balance sheet', enabled: (c) => c.finance?.enabled !== false },
   { id: 'coa', label: 'Chart of accounts', enabled: (c) => c.chartOfAccounts.enabled },

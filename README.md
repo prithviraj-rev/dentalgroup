@@ -278,7 +278,7 @@ tabs: its own endpoint (`GET /api/category-view`, same filters and office scopin
 Turn it off with `enabled: false` or env `SYNC_SCHEDULE=off`. It runs inside the server process, so the host must
 keep the service running (Railway does by default; do not enable app sleeping).
 
-## Group overview, Cash & balance sheet, Offices (client sheet)
+## Group overview, Cash & balance sheet, Financial KPIs
 
 More tabs, each with its own config file and endpoint (`server/finance/`, `server/offices/`), separate from the P&L tabs.
 
@@ -304,7 +304,7 @@ and no practice-system import for this client). Their APIs still exist: `GET /ap
 from QuickBooks budgets) and `GET/POST /api/practice-kpis` (`config/practice-kpis.json`, CSV / JSON import of
 production, collections, visits, new patients, combined with the P&L).
 
-**Offices (client sheet)** (`GET /api/office-sheet…`, `config/offices-sheet.json`, `app.config.json` `officesSheet`)
+**Financial KPIs** (`GET /api/office-sheet…`, `config/offices-sheet.json`, `app.config.json` `officesSheet`)
 - The same page as the Offices tab, served by the same code with another row config: every statement row holds
   exactly the account numbers of column E of the client's Financial KPI sheet, matched at the start of the account
   name or of any level of its path (402, 503.1 / 504 / 506.3 / 576 / 506.2, 503, 505 / 517, 521, 536, 559, 507,
@@ -344,9 +344,11 @@ production, collections, visits, new patients, combined with the P&L).
   management fees) are memo lines, never in EBITDA. Balance sheet at the as-of month end and a year earlier (both
   companies merged by account path, cumulative net income in equity) and 24-month trends of collections, EBITDA and
   cash. Picking a single company in the header opens its office.
-- **Combine companies** (button on the tab, roles that may manage data): tick the companies that are one practice, give the
-  office a name, save. Saved offices live in the database (table office_groups, POST/DELETE /api/office-view/setup), override
-  the config pairs, and a company can be in one saved office only. Remove one to fall back to the automatic pairing.
+- **Combine** (roles that may manage data): tick two or more offices and press Combine, or open the panel and tick
+  companies. The result is a **combined office**, an extra view listed under "Combined offices" on both Offices tabs
+  and opened straight away; the offices themselves stay in the list, the portfolio totals and flags do not count the
+  combinations, and a company may be in several. Combinations live in the database (table office_groups, POST/DELETE
+  /api/office-view/setup, key `combined-<id>`); Edit renames or re-ticks one, Remove deletes it without touching any office.
 
 **Raw QuickBooks data** (`server/raw/`, `config/raw-sync.json`): the newer tabs (Category compare, Offices, Group overview,
 Cash & balance sheet, Budget, Practice KPIs) are built only from raw records pulled through the QuickBooks Accounting

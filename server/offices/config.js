@@ -97,10 +97,16 @@ export function loadOfficesConfig(file = path.resolve(ROOT, appConfig.offices?.f
   const rollUp = raw.statement?.rollUpSubAccounts ?? true;
   if (![true, false, 'matched'].includes(rollUp)) throw new Error(`${name}: statement.rollUpSubAccounts must be true | false | "matched"`);
   const statement = { rollUpSubAccounts: rollUp };
+  const SECTIONS = ['tiles', 'statement', 'pl', 'balanceSheet', 'trends'];
+  const sections = raw.page?.sections ?? SECTIONS;
+  if (!Array.isArray(sections) || !sections.length || sections.some((x) => !SECTIONS.includes(x))) throw new Error(`${name}: page.sections must be a non-empty list from ${SECTIONS.join(' | ')}`);
+  const memo = raw.page?.memo ?? true;
+  if (typeof memo !== 'boolean') throw new Error(`${name}: page.memo must be true or false`);
+  const page = { sections, memo };
   const includeLoanPayments = raw.cashFlow?.includeLoanPayments ?? false;
   if (typeof includeLoanPayments !== 'boolean') throw new Error(`${name}: cashFlow.includeLoanPayments must be true or false`);
   return {
-    statement,
+    statement, page,
     cashFlow: { includeLoanPayments },
     naming, offices, autoPair, rows,
     payrollTaxes: { re: regex(pt.accounts, 'payrollTaxes.accounts', name), allocateTo },

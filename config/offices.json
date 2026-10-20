@@ -34,10 +34,10 @@
       { "key": "providerComp", "label": "Provider Compensation", "role": "cost", "accounts": "doctor|associate dentist|^dentist|dentist$|hygien|provider", "$comment": "Dentist compensation, hygienists; bonuses, payroll taxes and benefits are added in proportion (payrollTaxes below)." },
       { "key": "staffPayroll", "label": "Staff Payroll", "role": "cost", "accounts": "staff(?! training| licen)|dental assistant|temp agency|contract labor|payroll expense|wages?|salar|overtime|laundry|uniform", "$comment": "Non-provider wages and overtime; their share of payroll taxes and benefits is added (payrollTaxes below). 'Staff Training' and 'Staff License' (517.x) are training, not payroll." },
       { "key": "trainingHiring", "label": "Provider Training & Hiring", "role": "cost", "accounts": "recruit|training|continuing ed|\\bce\\b|hiring" },
+      { "key": "marketing", "label": "Marketing", "role": "cost", "accounts": "advertis|marketing|promot" },
       { "key": "dentalSupplies", "label": "Dental Supplies", "role": "cost", "accounts": "dental suppl|supplies & labs|implant(?! lab)|emergency suppl|clinical suppl|dental equipment (repair|maint)|maintenance:[\\d.]* ?dental$", "$comment": "Dental materials and consumables plus dental equipment maintenance (560.1 Dental under Repairs & Maintenance). 536.4 Implant Lab is a lab fee." },
       { "key": "laboratory", "label": "Laboratory", "role": "cost", "accounts": "\\blabs?\\b|laborator" },
       { "key": "occupancy", "label": "Rent / Occupancy", "role": "cost", "accounts": "\\brent\\b|nnn|common area|electric|\\bgas\\b|water|trash|utilit|repair|maintenance|cleaning|janitor|alarm|waste", "$comment": "Rent, utilities, CAM/NNN and facility repairs." },
-      { "key": "marketing", "label": "Marketing", "role": "cost", "accounts": "advertis|marketing|promot" },
       { "key": "otherExpenses", "label": "Other Expenses", "role": "other" },
       { "key": "ebitdaBeforeFees", "label": "Office EBITDA before Management Fees", "role": "feesSubtotal" },
       { "key": "managementFees", "label": "DSO Management Fees", "role": "fees", "accounts": "^650|management fees?$|^management fee:|corporation overhead|direct charge|pass thru|other management charges" },
@@ -47,7 +47,7 @@
   },
   "statement": {
     "$comment": "rollUpSubAccounts: which account the lines behind a statement row are shown under. \"matched\" = the level of the QuickBooks path the row's rule matched (503.1 Dental Contract Labor, 504 Hygienist, 576 Payroll Tax Expense), deeper sub-accounts rolled into it; true = the main account only (402 Income, 5000 Total Payroll Expenses), so a parent split across rows shows the same name in each; false = every sub-account.",
-    "rollUpSubAccounts": "matched"
+    "rollUpSubAccounts": true
   },
   "payrollTaxes": {
     "$comment": "Payroll taxes, benefits and bonuses are split across these rows in proportion to their amounts each month (all to the last row when both are zero).",

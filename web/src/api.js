@@ -33,7 +33,11 @@ export const api = {
   officeSetup: (base = 'office-view') => request(`/api/${base}/setup`),
   officeSave: (body, base = 'office-view') => request(`/api/${base}/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   officeDelete: (id, base = 'office-view') => request(`/api/${base}/setup/${id}`, { method: 'DELETE' }),
+  officeGroups: (base = 'office-view') => request(`/api/${base}/groups`),
+  officeCompare: (filters, base = 'office-view') => request(`/api/${base}/compare?${qs(filters)}`),
   officeDetail: (key, filters, base = 'office-view') => request(`/api/${base}/${encodeURIComponent(key)}?${qs(filters)}`),
+  // KPI dashboard: path is app.config.json kpiDashboard.apiPath.
+  kpiDashboard: (filters, path = 'kpi-dashboard') => request(`/api/${path}?${qs(filters)}`),
   transactions: (params) => request(`/api/transactions?${qs(params)}`),
   sync: () => request('/sync', { method: 'POST' }),
 };

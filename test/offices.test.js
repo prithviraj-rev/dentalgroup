@@ -4,22 +4,39 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadOfficesConfig } from '../server/offices/config.js';
-import { resolveOffices, combinedOffices, periodWindow, isPartnerName, eliminateInternal, classifyLine, buildStatement, flagsFor, balanceTree, canonicalBook } from '../server/offices/offices.js';
-import { officePl, monthlyPl } from '../server/offices/pl.js';
+import { resolveOffices, bucketOf, combinedOffices, periodWindow, isPartnerName, eliminateInternal, classifyLine, buildStatement, flagsFor, balanceTree, canonicalBook } from '../server/offices/offices.js';
+import { officePl, comparePl, monthlyPl } from '../server/offices/pl.js';
 
 test('client-sheet offices config: extends offices.json, rows hold exactly the account numbers of the sheet', () => {
   const sheet = loadOfficesConfig(path.resolve('config/offices-sheet.json'));
-  assert.equal(sheet.rows.length, 14, 'the sheet has 14 rows incl. Small Equipment Lease');
-  assert.deepEqual(sheet.rows.map((r) => r.key), ['netCollections', 'providerComp', 'staffPayroll', 'trainingHiring', 'marketing', 'dentalSupplies', 'laboratory', 'occupancy', 'smallEquipmentLease', 'otherExpenses', 'ebitdaBeforeFees', 'managementFees', 'officeEbitda', 'operatingCashFlow']);
-  assert.equal(sheet.naming.pattern, cfg.naming.pattern, 'inherited');
+  assert.equal(sheet.rows.length, 17, 'the sheet (2026-10-26) has 17 rows: Small Equipment Lease struck out, Legal & Professional, Partner withdrawal and the two non-operating rows added');
+  assert.deepEqual(sheet.rows.map((r) => r.key), ['netCollections', 'providerComp', 'staffPayroll', 'trainingHiring', 'marketing', 'dentalSupplies', 'laboratory', 'occupancy', 'legalProfessional', 'otherExpenses', 'ebitdaBeforeFees', 'managementFees', 'officeEbitda', 'partnerWithdrawal', 'operatingCashFlow', 'nonOperatingIncome', 'nonOperatingExpenses']);
   assert.equal(sheet.internal.income.unmatched, cfg.internal.income.unmatched, 'inherited');
-  assert.equal(sheet.payrollTaxes.re, null, 'no proportional split: 576 / 506.2 / 506.3 are whole rows of Provider Compensation');
+  assert.deepEqual(sheet.payrollTaxes.allocateTo, ['providerComp', 'staffPayroll'], 'the sheet lists 576 and 506 under both payroll rows: split in proportion');
   assert.equal(sheet.cashFlow.includeLoanPayments, true);
   assert.equal(cfg.cashFlow.includeLoanPayments, false);
   assert.equal(sheet.statement.rollUpSubAccounts, 'matched');
   assert.deepEqual(sheet.page.sections, ['statement', 'pl'], 'statement plus the QuickBooks-style profit and loss');
   assert.deepEqual(cfg.page.sections, ['tiles', 'statement', 'pl', 'balanceSheet', 'trends']);
   assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { sections: ['charts'] } })), /page.sections/);
+  const { columns, buckets, ...sheetPf } = sheet.page.portfolio;
+  assert.deepEqual(sheetPf, { summary: false, flags: false, tags: false, combinedList: false, label: "VJ's Dashboard", nameColumn: 'Company' }, 'Financial KPIs: no portfolio tiles, Combine companies, flag chips or pills, company tags or combined list; list headed by the client name');
+  assert.deepEqual(columns.map((c) => c.key), ['netCollections', 'totalExpenses', 'managementFees', 'officeEbitda', 'withdrawals', 'operatingCashFlow'], 'the six columns VJ typed on the 2026-10-27 call');
+  assert.deepEqual(columns.map((c) => c.label), ['Collections', 'Total expenses', 'Management fees', 'EBITDA', 'Withdrawals & profits', 'Cash flow'], 'labels as VJ shortened them on the 2026-10-28 call');
+  assert.deepEqual(buckets.list.map((b) => b.key), ['sabuska', 'dental', 'dentalRe', 'nonDentalRe', 'other', 'nonOperational'], 'the groups of the client org-structure sheet (2026-10-28), Sabuska first');
+  assert.equal(buckets.rest, 'other');
+  assert.equal(buckets.list.find((b) => b.key === 'sabuska').show, true, 'the holding company is listed first (2026-10-28 evening: VJ wants its lines back)');
+  assert.equal(buckets.list.find((b) => b.key === 'dental').show, true, 'show defaults to true');
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { portfolio: { buckets: { list: [{ key: 'a', label: 'A', show: 'no' }], rest: 'a' } } } })), /buckets\.list\[0\]\.show/);
+  assert.equal(buckets.list.find((b) => b.key === 'other').companies.includes('9130351692019756'), true, 'VJ 2026-10-28: Sage Consulting Group sits under Construction, development & equipment, not Dental');
+  assert.equal(sheet.autoPair.otherCompanies, 'offices', 'every connected company is listed, not only the dental group');
+  assert.equal(sheet.naming.pattern, '{company}');
+  assert.deepEqual(cfg.page.portfolio, { summary: true, flags: true, tags: true, combinedList: true, label: 'Offices', nameColumn: 'Offices', columns: null, buckets: null });
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { portfolio: { columns: [{ key: 'nope' }] } } })), /columns\[0\]\.key "nope"/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { portfolio: { buckets: { list: [{ key: 'a', label: 'A' }], rest: 'b' } } } })), /buckets.rest/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, autoPair: { otherCompanies: 'all' } })), /autoPair.otherCompanies/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { portfolio: { flags: 'no' } } })), /page.portfolio.flags/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { portfolio: { label: '' } } })), /page.portfolio.label/);
   assert.throws(() => loadOfficesConfig(tmp({ ...base, statement: { rollUpSubAccounts: 'deep' } })), /rollUpSubAccounts/);
   const k = (grp, account, fullName) => classifyLine(L('D', '2026-01', grp, account, 1, null, fullName), sheet);
   assert.deepEqual(k('Income', '402.1 Cash/Patient Checks', '402 Income:402.1 Cash/Patient Checks'), { kind: 'row', key: 'netCollections' });
@@ -28,27 +45,37 @@ test('client-sheet offices config: extends offices.json, rows hold exactly the a
   assert.deepEqual(k('Expenses', 'Dentist', '503 Contract Labor:503.1 Dental Contract Labor:Dentist'), { kind: 'row', key: 'providerComp' });
   assert.deepEqual(k('Expenses', 'Staff', '503 Contract Labor:503.1 Dental Contract Labor:Staff'), { kind: 'row', key: 'providerComp' }, 'sheet: all of 503.1');
   assert.deepEqual(k('Expenses', '504 Hygienist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist'), { kind: 'row', key: 'providerComp' });
-  assert.deepEqual(k('Expenses', '576 Payroll Tax Expense', '5000.1 Total Payroll Expenses:550.1 Payroll Taxes & Fees:576 Payroll Tax Expense'), { kind: 'row', key: 'providerComp' }, 'whole, not split');
-  assert.deepEqual(k('Expenses', '506.3 Bonus', '506 Employee Benefits Expense:506.3 Bonus'), { kind: 'row', key: 'providerComp' });
-  assert.deepEqual(k('Expenses', '506.1 Health Insurance', '506 Employee Benefits Expense:506.1 Health Insurance'), { kind: 'memo', key: 'unassigned' }, 'not in the sheet: left out of the statement');
-  assert.deepEqual(k('Expenses', "500 Doctor's payroll", "5000.1 Total Payroll Expenses:5000.2 Payroll Expense:500 Doctor's payroll"), { kind: 'memo', key: 'unassigned' }, 'sheet column E does not list 500');
+  assert.deepEqual(k('Expenses', '576 Payroll Tax Expense', '5000.1 Total Payroll Expenses:550.1 Payroll Taxes & Fees:576 Payroll Tax Expense'), { kind: 'tax', key: 'payrollTaxes' }, 'sheet: 576 under both payroll rows -> split');
+  assert.deepEqual(k('Expenses', '506.3 Bonus', '506 Employee Benefits Expense:506.3 Bonus'), { kind: 'tax', key: 'payrollTaxes' });
+  assert.deepEqual(k('Expenses', '506.1 Health Insurance', '506 Employee Benefits Expense:506.1 Health Insurance'), { kind: 'tax', key: 'payrollTaxes' }, 'sheet: Benefits 506 whole');
+  assert.deepEqual(k('Expenses', "500 Doctor's payroll", "5000.1 Total Payroll Expenses:5000.2 Payroll Expense:500 Doctor's payroll"), { kind: 'row', key: 'providerComp' }, 'sheet: 500');
+  assert.deepEqual(k('Expenses', '501 Associate Dentist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:501 Associate Dentist'), { kind: 'row', key: 'providerComp' }, 'sheet: 501');
+  assert.deepEqual(k('Expenses', '5000.2 Payroll Expense', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense'), { kind: 'memo', key: 'unassigned' }, '5000 is not 500');
   assert.deepEqual(k('Expenses', '530.1 Dental Related Insurance', '530 Insurance:530.1 Dental Related Insurance'), { kind: 'row', key: 'otherExpenses' }, 'sheet: insurance 530 is Other');
   assert.deepEqual(k('Expenses', '554.1 Office Expense', '554 Office Expense & Postage & Donations:554.1 Office Expense'), { kind: 'row', key: 'otherExpenses' });
-  assert.deepEqual(k('Expenses', '554.3 Postage', '554 Office Expense & Postage & Donations:554.3 Postage'), { kind: 'memo', key: 'unassigned' }, 'sheet lists 554.1 only');
+  assert.deepEqual(k('Expenses', '554.3 Postage', '554 Office Expense & Postage & Donations:554.3 Postage'), { kind: 'row', key: 'otherExpenses' }, 'sheet: Office Exp 554 (whole)');
+  assert.deepEqual(k('Expenses', '542 Legal & Professional Fees'), { kind: 'row', key: 'legalProfessional' }, 'sheet: own row');
+  assert.deepEqual(k('Expenses', '524 Dues & Subscriptions'), { kind: 'row', key: 'otherExpenses' });
+  assert.deepEqual(k('Expenses', '546 Medical Waste'), { kind: 'row', key: 'otherExpenses' });
   assert.equal(sheet.page.memo, false);
   assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { memo: 'no' } })), /page.memo/);
   assert.deepEqual(k('Expenses', '503 Staff Payroll', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:503 Staff Payroll'), { kind: 'row', key: 'staffPayroll' });
   assert.deepEqual(k('Expenses', '503.3 Temp Agency', '503 Contract Labor:503.3 Temp Agency'), { kind: 'row', key: 'staffPayroll' });
-  assert.deepEqual(k('Expenses', '502 Dental Assistant', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:502 Dental Assistant'), { kind: 'memo', key: 'unassigned' }, 'not in the sheet');
+  assert.deepEqual(k('Expenses', '502 Dental Assistant', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:502 Dental Assistant'), { kind: 'row', key: 'staffPayroll' }, 'sheet: 502');
   assert.deepEqual(k('Expenses', '517.2 Staff Training', '517 Continuing Ed & Training Courses:517.2 Staff Training'), { kind: 'row', key: 'trainingHiring' });
-  assert.deepEqual(k('Expenses', '560.1 Dental', '560 Repairs & Maintenance:560.1 Dental'), { kind: 'row', key: 'otherExpenses' }, 'sheet: repairs 560 are Other');
-  assert.deepEqual(k('Expenses', '586.1 Electric', '586 Electric, Gas, Water & Trash:586.1 Electric'), { kind: 'memo', key: 'unassigned' }, 'sheet: rent is 559 only and 586 is in no row');
+  assert.deepEqual(k('Expenses', '560.1 Dental', '560 Repairs & Maintenance:560.1 Dental'), { kind: 'row', key: 'otherExpenses' }, 'sheet: Repairs 560 are Other Expenses, not rent');
+  assert.deepEqual(k('Expenses', '560.2 Non Dental', '560 Repairs & Maintenance:560.2 Non Dental'), { kind: 'row', key: 'otherExpenses' });
+  assert.deepEqual(k('Expenses', '586.1 Electric', '586 Electric, Gas, Water & Trash:586.1 Electric'), { kind: 'row', key: 'otherExpenses' }, 'sheet: Utilities 586 are Other Expenses');
   assert.deepEqual(k('Expenses', '559.2 Common Area Maintenance', '559 Rent & NNN:559.2 Common Area Maintenance'), { kind: 'row', key: 'occupancy' });
-  assert.deepEqual(k('Expenses', '540.1 Small Dental Equipment', '540 Equipment Lease Expense:540.1 Small Dental Equipment'), { kind: 'row', key: 'smallEquipmentLease' });
+  assert.deepEqual(k('Expenses', '540.1 Small Dental Equipment', '540 Equipment Lease Expense:540.1 Small Dental Equipment'), { kind: 'memo', key: 'unassigned' }, 'Small Equipment Lease struck out of the sheet');
   assert.deepEqual(k('Expenses', '540.2 Non-Dental', '540 Equipment Lease Expense:540.2 Non-Dental'), { kind: 'memo', key: 'unassigned' });
   assert.deepEqual(k('Expenses', '650.1 Corporation Overhead Charges', '650 Management Fee:650.1 Corporation Overhead Charges'), { kind: 'row', key: 'managementFees' });
   assert.deepEqual(k('Expenses', '520 Depreciation Expense'), { kind: 'memo', key: 'notOperating' }, 'inherited');
-  assert.deepEqual(k('OtherExpenses', '802.1 Management Profit', '802 Profits:802.1 Management Profit'), { kind: 'memo', key: 'profitTransfers' }, 'inherited');
+  assert.deepEqual(k('OtherExpenses', '802.1 Management Profit', '802 Profits:802.1 Management Profit'), { kind: 'row', key: 'partnerWithdrawal' }, 'sheet: 802.1 / 802.2 is the Partner withdrawal row, before the inherited profit-transfer rule');
+  assert.deepEqual(k('OtherExpenses', '802.3 Other', '802 Profits:802.3 Other'), { kind: 'memo', key: 'profitTransfers' }, 'inherited');
+  assert.deepEqual(k('OtherIncome', '801 Non Operation Income'), { kind: 'row', key: 'nonOperatingIncome' }, 'before the other-income memo and the internal-income rule');
+  assert.deepEqual(k('OtherExpenses', '701.1 Interest Expense', '701 Non Operational Expenses:701.1 Interest Expense'), { kind: 'row', key: 'nonOperatingExpenses' }, 'before the notOperating rule');
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, rows: { list: [...base.rows.list, { key: 'x', label: 'X', role: 'item' }] } })), /accounts is required for role item/);
   // The accounts behind a row are shown at the level the rule matched.
   const st = buildStatement([
     L('S', '2026-05', 'Expenses', '504 Hygienist', 100, null, '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist'),
@@ -58,9 +85,43 @@ test('client-sheet offices config: extends offices.json, rows hold exactly the a
     L('D', '2026-05', 'Income', '402.1 Cash', 1000, null, '402 Income:402.1 Cash'),
   ], office, sheet, { window: periodWindow('2026-05', 'month'), months: ['2026-05'] });
   const children = (key) => st.rows.find((r) => r.key === key).children.map((c) => [c.account, c.fullName, c.period]);
-  assert.deepEqual(children('providerComp'), [['504 Hygienist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist', 100], ['503.1 Dental Contract Labor', '503 Contract Labor:503.1 Dental Contract Labor', 75]], 'Dentist and Staff roll up into 503.1');
+  assert.deepEqual(children('providerComp'), [['503.1 Dental Contract Labor', '503 Contract Labor:503.1 Dental Contract Labor', 75], ['504 Hygienist', '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist', 100]], 'Dentist and Staff roll up into 503.1; account-number order');
   assert.deepEqual(children('staffPayroll'), [['503 Contract Labor', '503 Contract Labor', 10]], 'rule 503 matches the top level, so 503.3 rolls up into it');
   assert.deepEqual(children('netCollections'), [['402 Income', '402 Income', 1000]]);
+  // statement.sortAccounts = number: the accounts behind a row in account-number order, whatever their amounts.
+  assert.equal(sheet.statement.sortAccounts, 'number');
+  assert.equal(cfg.statement.sortAccounts, 'amount', 'Offices tab: largest first');
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, statement: { sortAccounts: 'name' } })), /sortAccounts/);
+  const sorted = buildStatement([
+    L('S', '2026-05', 'Expenses', '586.1 Electric', 900, null, '586 Electric, Gas, Water & Trash:586.1 Electric'),
+    L('S', '2026-05', 'Expenses', '554.1 Office Expense', 500, null, '554 Office Expense & Postage & Donations:554.1 Office Expense'),
+    L('S', '2026-05', 'Expenses', '512 Bank Fees', 10),
+    L('S', '2026-05', 'Expenses', '530.1 Dental Related Insurance', 700, null, '530 Insurance:530.1 Dental Related Insurance'),
+    L('S', '2026-05', 'Expenses', '504 Hygienist', 100, null, '5000.1 Total Payroll Expenses:5000.2 Payroll Expense:504 Hygienist'),
+    L('S', '2026-05', 'Expenses', "500 Doctor's payroll", 5, null, "5000.1 Total Payroll Expenses:5000.2 Payroll Expense:500 Doctor's payroll"),
+    L('S', '2026-05', 'Expenses', '576 Payroll Tax Expense', 50),
+  ], office, sheet, { window: periodWindow('2026-05', 'month'), months: ['2026-05'] });
+  assert.deepEqual(sorted.rows.find((r) => r.key === 'otherExpenses').children.map((c) => c.account), ['512 Bank Fees', '530 Insurance', '554 Office Expense & Postage & Donations', '586 Electric, Gas, Water & Trash'], '512 first although it is the smallest');
+  assert.deepEqual(sorted.rows.find((r) => r.key === 'providerComp').children.map((c) => c.account), ["500 Doctor's payroll", '504 Hygienist', 'Payroll taxes (allocated)'], 'allocated line last');
+  assert.deepEqual(buildStatement([
+    L('S', '2026-05', 'Expenses', '512 Bank Fees', 10),
+    L('S', '2026-05', 'Expenses', '586.1 Electric', 900, null, '586 Electric, Gas, Water & Trash:586.1 Electric'),
+  ], office, { ...sheet, statement: { ...sheet.statement, sortAccounts: 'amount' } }, { window: periodWindow('2026-05', 'month'), months: ['2026-05'] }).rows.find((r) => r.key === 'otherExpenses').children.map((c) => c.account), ['586 Electric, Gas, Water & Trash', '512 Bank Fees'], 'amount: largest first');
+  // Item rows (partner withdrawal, non-operating): shown as booked, outside EBITDA and never an internal charge.
+  const it = buildStatement([
+    L('D', '2026-05', 'Income', '402.1 Cash', 1000, null, '402 Income:402.1 Cash'),
+    L('S', '2026-05', 'Expenses', '521 Dental Supplies', 100),
+    L('S', '2026-05', 'OtherExpenses', '802.1 Management Profit', 300, 'Luxia Dental LLC', '802 Profits:802.1 Management Profit'),
+    L('D', '2026-05', 'OtherIncome', '801 Non Operation Income', 300, 'zz subDSO IndianaPolis'),
+    L('S', '2026-05', 'OtherExpenses', '701 Non Operational Expenses', 40),
+  ], office, sheet, { window: periodWindow('2026-05', 'month'), months: ['2026-05'] });
+  const ir = (key) => it.rows.find((r) => r.key === key);
+  assert.equal(ir('partnerWithdrawal').months['2026-05'], 300, 'as booked, even though the payee is the other company');
+  assert.equal(ir('nonOperatingIncome').months['2026-05'], 300);
+  assert.equal(ir('nonOperatingExpenses').months['2026-05'], 40);
+  assert.equal(ir('officeEbitda').months['2026-05'], 900, 'item rows are in no subtotal');
+  assert.deepEqual(it.internalPeriod, { expense: 0, income: 0, matched: 0 }, 'item lines are not internal-charge candidates');
+  assert.equal(it.memo.length, 0);
   // One spelling per account across the companies of an office; children merge by name however the companies spell or nest it.
   const books = {
     A: { 1: { id: '1', name: '650 Management Fees', fullName: '650 Management Fees', type: 'Expense' }, 2: { id: '2', name: '503 Staff Payroll', fullName: '5000 Total Payroll Expenses:5000.1 Payroll Expense:503 Staff Payroll', type: 'Expense' } },
@@ -129,6 +190,11 @@ test('combined profit and loss: accounts merged by path across the two companies
   assert.deepEqual(c.subtotals.netIncome.periods, { D: 2900, S: -340 });
   assert.equal(c.subtotals.netIncome.total, 2560);
   assert.deepEqual(monthlyPl(lines, ['2026-01', '2026-02']), { '2026-01': { revenue: 1000, netIncome: 850 }, '2026-02': { revenue: 2000, netIncome: 1710 } });
+  // Compare view: one column per office (here each company is its own office); total = both together.
+  const cmp = comparePl({ offices: [{ key: 'a', name: 'Office A', companies: [companies[0]] }, { key: 'b', name: 'Office B', companies: [companies[1]] }], book, lines, months: ['2026-01', '2026-02'] });
+  assert.deepEqual(cmp.buckets, [{ key: 'a', label: 'Office A' }, { key: 'b', label: 'Office B' }]);
+  assert.deepEqual(cmp.subtotals.netIncome, { periods: { a: 2900, b: -340 }, total: 2560 });
+  assert.deepEqual(cmp.types.find((t) => t.accountType === 'Expense').nodes.map((n) => [n.name, n.periods, n.total]), [['521 Dental Supplies', { a: 100, b: 50 }, 150]], 'same account merged across offices');
 });
 
 const cfg = loadOfficesConfig();
@@ -183,13 +249,78 @@ test('offices: explicit pairs, pairing by city, standalone sub-DSO, scope', () =
   assert.deepEqual(dup.map((o) => o.name).filter((n) => n.includes('Springfield')), ['Dental Office - Springfield (Admire Dental Springfield)', 'Dental Office - Springfield (Second Springfield Dental)'], 'same-city offices are told apart');
 });
 
+test('offices: autoPair.otherCompanies = offices lists every company; buckets by company or category', () => {
+  const all = resolveOffices(companies, { ...testCfg, naming: { pattern: '{company}', fallback: '{company}' }, autoPair: { ...testCfg.autoPair, otherCompanies: 'offices' } }, categoryOf);
+  const byName = Object.fromEntries(all.map((o) => [o.name, o]));
+  assert.deepEqual(Object.keys(byName).sort(), ['Admire Dental Branford', 'Admire Dental Springfield', 'Head Office Dental', 'Y Pueblo Properties', 'zz SubDSO Pueblo'], 'every company is listed, named after its first company');
+  assert.deepEqual(byName['zz SubDSO Pueblo'].companies.map((c) => c.realmId), ['6'], 'the sub-DSO still does not pair with the real-estate company at the same city');
+  assert.deepEqual(byName['Y Pueblo Properties'].companies.map((c) => c.realmId), ['7'], 'the real-estate company is its own office');
+  assert.deepEqual(byName['Admire Dental Branford'].companies.map((c) => c.realmId), ['2', '3']);
+  const buckets = { list: [{ key: 'hq', label: 'HQ', companies: ['6'], categories: [] }, { key: 'dental', label: 'Dental', companies: [], categories: ['Dental Companies'] }, { key: 'other', label: 'Other', companies: [], categories: [] }], rest: 'other' };
+  assert.equal(bucketOf(byName['zz SubDSO Pueblo'], buckets, categoryOf), 'hq', 'a listed company wins');
+  assert.equal(bucketOf(byName['Admire Dental Branford'], buckets, categoryOf), 'dental', 'else the category of the first company');
+  assert.equal(bucketOf(byName['Y Pueblo Properties'], buckets, categoryOf), 'other', 'else rest');
+  assert.equal(bucketOf(byName['Y Pueblo Properties'], null, categoryOf), null);
+});
+
 test('period windows: month, last full quarter, YTD, TTM and the prior year', () => {
-  assert.deepEqual(periodWindow('2026-10', 'month'), { key: 'month', label: 'Month', from: '2026-10', to: '2026-10', priorFrom: '2025-10', priorTo: '2025-10' });
+  assert.deepEqual(periodWindow('2026-10', 'month'), { key: 'month', label: 'Last month', from: '2026-10', to: '2026-10', priorFrom: '2025-10', priorTo: '2025-10' });
   assert.deepEqual(periodWindow('2026-10', 'quarter'), { key: 'quarter', label: 'Q3 2026', from: '2026-07', to: '2026-09', priorFrom: '2025-07', priorTo: '2025-09' });
   assert.equal(periodWindow('2026-09', 'quarter').to, '2026-09');
   assert.deepEqual(periodWindow('2026-10', 'ytd', 1).from, '2026-01');
   assert.deepEqual(periodWindow('2026-03', 'ytd', 7).from, '2025-07');
   assert.deepEqual(periodWindow('2026-10', 'ttm').from, '2025-11');
+  // 2026-10-28 (VJ): Last year = the last full fiscal year ending at or before asOf; Custom = the header From up to asOf.
+  assert.deepEqual(periodWindow('2026-09', 'lastYear'), { key: 'lastYear', label: 'Year 2025', from: '2025-01', to: '2025-12', priorFrom: '2024-01', priorTo: '2024-12' });
+  assert.equal(periodWindow('2025-12', 'lastYear').to, '2025-12', 'a December as-of counts that year as full');
+  assert.deepEqual(periodWindow('2026-03', 'lastYear', 7), { key: 'lastYear', label: 'Year to 2025-06', from: '2024-07', to: '2025-06', priorFrom: '2023-07', priorTo: '2024-06' });
+  assert.deepEqual(periodWindow('2026-09', 'custom', 1, '2026-03'), { key: 'custom', label: 'Custom', from: '2026-03', to: '2026-09', priorFrom: '2025-03', priorTo: '2025-09' });
+  assert.equal(periodWindow('2026-09', 'custom', 1, '2026-11').from, '2026-09', 'a From after asOf falls back to the as-of month');
+});
+
+test('display names: naming.companies by the first company, pairNote for two-company offices; picker groups by company', () => {
+  const naming = { pattern: '{company}', fallback: '{company}', pairNote: 'dental + sub-DSO', companies: { 2: { name: 'Admire Dental Branford', short: 'Branford', note: null }, 6: { name: 'Admire Dental Pueblo', short: 'Pueblo', note: 'sub-DSO only' } } };
+  const all = resolveOffices(companies, { ...testCfg, naming, autoPair: { ...testCfg.autoPair, otherCompanies: 'offices' } }, categoryOf);
+  const byId = Object.fromEntries(all.map((o) => [o.companies[0].realmId, o]));
+  assert.deepEqual([byId[2].name, byId[2].short, byId[2].note], ['Admire Dental Branford', 'Branford', 'dental + sub-DSO'], 'the pair takes the DBA name and the pair note');
+  assert.deepEqual([byId[6].name, byId[6].short, byId[6].note], ['Admire Dental Pueblo', 'Pueblo', 'sub-DSO only'], 'a lone sub-DSO is named after the practice it manages, with its note');
+  assert.deepEqual([byId[7].name, byId[7].short, byId[7].note], ['Y Pueblo Properties', null, null], 'companies not listed keep their QuickBooks names');
+  assert.equal(byId[2].key, 'admire-dental-branford-2', 'the key follows the display name');
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, naming: { companies: { 1: { name: 'Admire Dental Bristol', short: 'Branford' } } } })), /naming.companies\["1"\].short/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, naming: { companies: { 1: { short: 'x' } } } })), /naming.companies\["1"\].name/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, picker: { groups: [{ key: 'a', label: 'A' }], rest: 'zz' } })), /picker.rest/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, periods: { options: ['month', 'week'] } })), /periods.options/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, periods: { default: 'ttm', options: ['month'] } })), /periods.default/);
+  assert.equal(cfg.picker, null);
+  assert.deepEqual(cfg.periods.options, ['month', 'quarter', 'ytd', 'lastYear', 'ttm', 'custom'], 'default: every period');
+  const sheet = loadOfficesConfig(path.resolve('config/offices-sheet.json'));
+  assert.deepEqual(sheet.periods.options, ['month', 'quarter', 'ytd', 'custom'], 'VJ 2026-10-29: Last month, Last quarter, YTD, Custom (the calendar-year buttons were dropped again)');
+  assert.equal(sheet.periods.yearButtons, 3);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, periods: { yearButtons: 0 } })), /periods\.yearButtons/);
+  assert.deepEqual(periodWindow('2026-09', 'year:2025'), { key: 'year:2025', label: '2025', from: '2025-01', to: '2025-12', priorFrom: '2024-01', priorTo: '2024-12' });
+  assert.deepEqual(periodWindow('2026-09', 'year:2026'), { key: 'year:2026', label: '2026', from: '2026-01', to: '2026-09', priorFrom: '2025-01', priorTo: '2025-09' }, 'the running year ends at asOf');
+  assert.equal(sheet.page.titles.statement, 'Synopsis P&L');
+  assert.equal(sheet.page.titles.pl, 'Detailed P&L');
+  assert.deepEqual(sheet.page.titles.combined, { statement: 'Combined Synopsis', pl: 'Combined Details' }, 'VJ 2026-10-29: a combined view has its own two titles');
+  assert.deepEqual(cfg.page.titles.combined, { statement: 'Combined statement', pl: 'Combined profit and loss' }, 'defaults');
+  assert.deepEqual(sheet.page.split, [5, 7], 'VJ 2026-10-29 call: about 40 / 60 so the statement stays readable on a laptop');
+  assert.deepEqual(cfg.page.split, [6, 6]);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { split: [4, 9] } })), /page\.split/);
+  assert.equal(sheet.page.portfolio.nameColumn, 'Company');
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { titles: { pl: '' } } })), /page\.titles\.pl/);
+  assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { titles: { combined: { statement: '' } } } })), /page\.titles\.combined\.statement/);
+  // Group header columns: only the dental practices say Collections, every other group Revenue (VJ 2026-10-29).
+  assert.deepEqual(sheet.page.portfolio.buckets.list.map((b) => [b.key, b.columns.netCollections || null]), [['sabuska', 'Revenue'], ['dental', null], ['dentalRe', 'Revenue'], ['nonDentalRe', 'Revenue'], ['other', 'Revenue'], ['nonOperational', 'Revenue']]);
+  const sheetRaw = JSON.parse(fs.readFileSync(path.resolve('config/offices-sheet.json'), 'utf8'));
+  const withCols = (columns) => tmp({ ...sheetRaw, page: { ...sheetRaw.page, portfolio: { ...sheetRaw.page.portfolio, buckets: { ...sheetRaw.page.portfolio.buckets, list: sheetRaw.page.portfolio.buckets.list.map((b, i) => (i ? b : { ...b, columns })) } } } });
+  assert.throws(() => loadOfficesConfig(withCols({ nope: 'Revenue' })), /buckets\.list\[0\]\.columns\.nope/);
+  assert.throws(() => loadOfficesConfig(withCols({ netCollections: '' })), /buckets\.list\[0\]\.columns\.netCollections/);
+  assert.deepEqual(['month', 'quarter', 'ytd', 'lastYear', 'custom'], ['month', 'quarter', 'ytd', 'lastYear', 'custom'], 'VJ 2026-10-28: Month, Last quarter, YTD, Last year, Custom');
+  assert.deepEqual(sheet.picker.list.map((g) => g.key), ['sabuska', 'dental', 'management', 'dentalRe', 'nonDentalRe', 'other', 'nonOperational'], 'picker: practices and management companies under separate headings');
+  assert.equal(Object.keys(sheet.naming.companies).length >= 12, true, 'DBA names from the org-structure sheet');
+  // picker groups go by company, so a sub-DSO lands in the management group even though it pairs with a practice in the list.
+  const picker = { list: [{ key: 'dental', label: 'Dental companies', companies: [], categories: ['Dental Companies'] }, { key: 'mgmt', label: 'Dental Management', companies: [], categories: ['Dental Management (z & zz)'] }, { key: 'other', label: 'Other', companies: [], categories: [] }], rest: 'other' };
+  assert.deepEqual(companies.map((c) => bucketOf({ companies: [c] }, picker, categoryOf)), companies.map((c) => ({ 'Dental Companies': 'dental', 'Dental Management (z & zz)': 'mgmt' })[categoryOf(c.realmId)] || 'other'));
 });
 
 const office = { key: 'o', name: 'Dental Office - Test', companies: [{ realmId: 'D', name: 'IN Luxia Dental LLC' }, { realmId: 'S', name: 'zz subDSO IndianaPolis' }], aliases: ['CT Luxia'] };

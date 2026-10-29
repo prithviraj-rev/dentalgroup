@@ -158,11 +158,11 @@ export async function fetchChartOfAccounts(db, realmId, { pageSize = 1000 } = {}
   return out;
 }
 
-export async function fetchProfitAndLoss(db, realmId, { startDate, endDate }) {
+export async function fetchProfitAndLoss(db, realmId, { startDate, endDate, accountingMethod = config.accountingMethod }) {
   return qboGet(db, realmId, 'reports/ProfitAndLoss', {
     start_date: startDate,
     end_date: endDate,
     summarize_column_by: 'Month',
-    accounting_method: config.accountingMethod,
+    accounting_method: accountingMethod,
   });
 }

@@ -12,7 +12,7 @@ export default function Reports() {
   const { cfg } = useApp();
   const { org } = useOutletContext();
   const [loaded, setLoaded] = useState(false);
-  const [stamp, setStamp] = useState(() => Date.now());
+  const [stamp] = useState(() => Date.now());
   const embed = cfg.reports.embed;
   const src = dashboardUrl(cfg);
 
@@ -31,15 +31,8 @@ export default function Reports() {
 
   return (
     <>
-      <PageHeader
-        title="Reports"
-        subtitle="P&L dashboard, office comparison and chart of accounts"
-        actions={<>
-          <button type="button" className="btn" onClick={() => { setLoaded(false); setStamp(Date.now()); }}>Refresh</button>
-          <a className="btn" href={src} target="_blank" rel="noreferrer">Open full screen ↗</a>
-        </>}
-      />
-      <Card className="relative overflow-hidden">
+      {/* No title line (VJ 2026-10-28): the dashboard, with its own tabs on top, takes the whole window (reports.embed.height); the negative margins cancel the page padding (2026-10-29: no wasted space). */}
+      <Card className="relative -m-3 overflow-hidden sm:-m-4" style={{ padding: 0, border: 0, borderRadius: 0 }}>
         {!loaded && <div className="absolute inset-0 animate-pulse bg-[var(--wash)]" />}
         <iframe
           title={`${org.name} reports`}

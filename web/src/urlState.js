@@ -2,7 +2,7 @@
 //   ?office=all|<realmId>|<id>,<id>&from=YYYY-MM&to=YYYY-MM&granularity=month|quarter|year&yoy=1
 //   &metric=netIncome&mainChart=combo&officeChart=lines
 
-const KEYS = ['tab', 'office', 'cat', 'from', 'to', 'granularity', 'metric', 'mainChart', 'officeChart', 'ametric', 'by', 'achart'];
+const KEYS = ['tab', 'office', 'cat', 'period', 'basis', 'from', 'to', 'granularity', 'metric', 'mainChart', 'officeChart', 'ametric', 'by', 'achart'];
 
 export function readUrlState() {
   const q = new URLSearchParams(window.location.search);

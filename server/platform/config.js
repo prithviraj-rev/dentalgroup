@@ -35,6 +35,7 @@ export function validatePlatformConfig(cfg) {
   if (!cfg.roles[cfg.adminRole] || cfg.adminRole === 'platform_admin') fail('adminRole must be an organization role');
   if (!cfg.roles[cfg.adminRole].permissions.includes('users.manage')) fail('adminRole must have users.manage');
   if (!cfg.roles[cfg.defaultInviteRole] || cfg.defaultInviteRole === 'platform_admin') fail('defaultInviteRole must be an organization role');
+  if (cfg.navigation.home != null && !(cfg.navigation.org || []).some((n) => n.id === cfg.navigation.home && n.enabled !== false)) fail(`navigation.home "${cfg.navigation.home}" is not an enabled navigation.org module`);
   for (const item of cfg.navigation.org || []) {
     if (!item.id || !item.label) fail('every navigation.org item needs id and label');
     if (item.permission && !perms.has(item.permission)) fail(`navigation.org "${item.id}" uses unknown permission "${item.permission}"`);

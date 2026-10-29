@@ -34,16 +34,20 @@ export function useNarrow(px = 640) {
   return narrow;
 }
 
-export function Section({ title, subtitle, right, children, className = '' }) {
+export function Section({ title, subtitle, right, left = null, children, className = '' }) {
   return (
-    <section className={`card min-w-0 p-3 sm:p-4 ${className}`}>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium">{title}</h2>
-          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+    <section className={`card min-w-0 p-2 ${className}`}>
+      {(title || subtitle || right || left) && (
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          {left || (
+            <div className="min-w-0">
+              {title && <h2 className="text-sm font-medium">{title}</h2>}
+              {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+            </div>
+          )}
+          {right}
         </div>
-        {right}
-      </div>
+      )}
       {children}
     </section>
   );
@@ -188,7 +192,8 @@ export function sortTh(sort, setSort, id, label, className = '', title) {
   return (
     <th key={id} scope="col" className={`whitespace-nowrap px-2 py-2 font-medium ${className}`} aria-sort={sort.col === id ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'} title={title}>
       <button type="button" className="inline-flex items-center gap-1 hover:text-ink" onClick={() => setSort((s) => ({ col: id, dir: s.col === id ? -s.dir : -1 }))}>
-        {label}<span className="text-[10px]" aria-hidden="true">{sort.col === id ? (sort.dir > 0 ? '▲' : '▼') : ''}</span>
+        {label}
+        <span className={`ml-0.5 text-[9px] ${sort.col === id ? 'text-ink' : 'text-muted opacity-40'}`} aria-hidden="true">{sort.col === id && sort.dir > 0 ? '▲' : '▼'}</span>
       </button>
     </th>
   );

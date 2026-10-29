@@ -118,7 +118,7 @@ export default function Organizations() {
                     {rows.map((o) => {
                       const st = cfg.orgStatuses[o.status] || { label: o.status, tone: 'neutral' };
                       return (
-                        <tr key={o.id} className="cursor-pointer" onClick={() => navigate(`/o/${o.id}/overview`)}>
+                        <tr key={o.id} className="cursor-pointer" onClick={() => navigate(`/o/${o.id}`)}>
                           <td>
                             <div className="flex items-center gap-2">
                               <span className="inline-block h-3 w-3 shrink-0 rounded" style={{ background: o.brandColor }} aria-hidden="true" />
@@ -151,7 +151,7 @@ export default function Organizations() {
           </Card>
         </div>
       )}
-      <NewOrgModal open={creating} onClose={() => setCreating(false)} onCreated={async (id) => { setCreating(false); await refreshMe(); reload(); navigate(`/o/${id}/overview`); }} />
+      <NewOrgModal open={creating} onClose={() => setCreating(false)} onCreated={async (id) => { setCreating(false); await refreshMe(); reload(); navigate(`/o/${id}`); }} />
     </>
   );
 }

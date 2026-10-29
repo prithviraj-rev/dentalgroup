@@ -1,0 +1,60 @@
+{
+  "$comment": "KPI dashboard tab: an Executive-style visual summary built from the office statements of the Offices instance named in app.config.json kpiDashboard.source (officesSheet = the client's column-E account map in config/offices-sheet.json; offices = config/offices.json). Every metric key is a statement row key of that config, or pct:<row key> = the row as % of net collections. The period is the header date range (the unfinished current month is left out); the comparison is the same months a year earlier. Restart the server after editing.",
+  "tiles": [
+    "netCollections",
+    "officeEbitda",
+    "pct:officeEbitda",
+    "operatingCashFlow"
+  ],
+  "shares": [
+    "providerComp",
+    "staffPayroll",
+    "dentalSupplies",
+    "laboratory"
+  ],
+  "trend": {
+    "$comment": "Two charts: bars by month (with the same month last year as a line) and line by month with its % of collections.",
+    "bars": "netCollections",
+    "line": "officeEbitda"
+  },
+  "leaderboard": {
+    "$comment": "Office table: columns in order, default sort column (descending), spark = sparkline metric by month.",
+    "columns": [
+      "netCollections",
+      "pct:providerComp",
+      "pct:staffPayroll",
+      "pct:dentalSupplies",
+      "pct:laboratory",
+      "pct:occupancy",
+      "officeEbitda",
+      "pct:officeEbitda",
+      "operatingCashFlow"
+    ],
+    "defaultSort": "netCollections",
+    "spark": "officeEbitda"
+  },
+  "heatmap": {
+    "$comment": "Office x month grid. clampPercent: full color at this many % (percent metrics) above / below zero.",
+    "metric": "pct:officeEbitda",
+    "clampPercent": 30
+  },
+  "costStructure": {
+    "$comment": "Each row as % of collections by office. rows: [] = every cost, other and fees row of the statement, in statement order.",
+    "rows": []
+  },
+  "movers": {
+    "$comment": "Accounts that moved EBITDA the most vs the same months last year: this many up and this many down.",
+    "count": 8
+  },
+  "bridge": {
+    "$comment": "Waterfall from net collections through each cost row and the management fees to office EBITDA.",
+    "enabled": true
+  },
+  "offices": {
+    "$comment": "Only offices in these page.portfolio.buckets of the source Offices config (null = every office). The dental world: Sabuska and the dental practices with their sub-DSOs; real estate and other companies are left out of the KPI dashboard.",
+    "buckets": [
+      "sabuska",
+      "dental"
+    ]
+  }
+}

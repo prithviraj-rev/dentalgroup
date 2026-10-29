@@ -129,6 +129,10 @@ test('upsert is idempotent and drops stale rows inside the synced window', () =>
   const rows = dedupeForStorage(parseProfitAndLoss(report));
   upsertPlLines(db, '1', 'Office A', rows, range);
   upsertPlLines(db, '1', 'Office A', rows, range);
+  // The cash-basis copy of the report lives in its own table with the same key and never touches pl_lines.
+  upsertPlLines(db, '1', 'Office A', rows.slice(0, 2), { ...range, table: 'pl_lines_cash' });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pl_lines_cash').get().n, 2);
+  assert.throws(() => upsertPlLines(db, '1', 'Office A', rows, { ...range, table: 'ledger' }), /unknown table/);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pl_lines').get().n, rows.length);
 
   upsertPlLines(db, '1', 'Office A', rows.slice(0, 3), range);

@@ -44,6 +44,14 @@ async function runSync(db, { startDate = config.syncStartDate, endDate = config.
       const rows = dedupeForStorage(parseProfitAndLoss(report));
       upsertPlLines(db, c.realm_id, companyName, rows, { startDate, endDate });
 
+      // The same report on a CASH basis (app.config.json sync.cashBasis) for the Accrual | Cash toggle: one more call per company.
+      let cashRows = null;
+      if (appConfig.sync.cashBasis) {
+        const cashReport = await fetchProfitAndLoss(db, c.realm_id, { startDate, endDate, accountingMethod: 'Cash' });
+        cashRows = dedupeForStorage(parseProfitAndLoss(cashReport));
+        upsertPlLines(db, c.realm_id, companyName, cashRows, { startDate, endDate, table: 'pl_lines_cash' });
+      }
+
       // Raw QuickBooks records for the newer tabs (config/raw-sync.json). Never fails the P&L sync.
       let raw = null;
       if (rawConfig.enabled) {
@@ -56,8 +64,8 @@ async function runSync(db, { startDate = config.syncStartDate, endDate = config.
         message: accounts == null ? null : `${accounts} accounts`,
         start_date: startDate, end_date: endDate, started_at: startedAt, finished_at: new Date().toISOString(),
       });
-      results.push({ ...base, companyName, status: 'success', rows: rows.length, accounts, raw: raw && { mode: raw.mode, records: raw.records, ledgerLines: raw.ledgerLines, errors: raw.errors } });
-      console.log(`[sync] ok   ${companyName} (${c.realm_id}): ${rows.length} P&L rows${accounts == null ? '' : `, ${accounts} accounts`}${raw?.records != null ? `, ${raw.records} raw records (${raw.mode})` : ''}${extraErrors.length ? ` (raw pull failed: ${extraErrors.join(', ')})` : ''}`);
+      results.push({ ...base, companyName, status: 'success', rows: rows.length, cashRows: cashRows?.length ?? null, accounts, raw: raw && { mode: raw.mode, records: raw.records, ledgerLines: raw.ledgerLines, errors: raw.errors } });
+      console.log(`[sync] ok   ${companyName} (${c.realm_id}): ${rows.length} P&L rows${cashRows ? ` (+${cashRows.length} cash basis)` : ''}${accounts == null ? '' : `, ${accounts} accounts`}${raw?.records != null ? `, ${raw.records} raw records (${raw.mode})` : ''}${extraErrors.length ? ` (raw pull failed: ${extraErrors.join(', ')})` : ''}`);
     } catch (err) {
       logSync(db, {
         realm_id: c.realm_id, company_name: c.company_name, status: 'error', message: err.message,

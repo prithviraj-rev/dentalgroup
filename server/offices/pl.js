@@ -35,12 +35,8 @@ function strip(n) {
  * Returns { months: view, companies: view }, each { buckets, types, subtotals, accountCount }.
  */
 export function officePl({ companies, book, lines, months }) {
-  const accounts = companies.flatMap((c) => Object.values(book(c.realmId)).filter((a) => CLASS_OF_TYPE[a.type]).map((a) => ({
-    office_realm_id: c.realmId, account_id: a.id, name: a.name, fully_qualified_name: a.fullName || a.name, account_type: a.type, account_sub_type: a.subType || null,
-    classification: a.classification || CLASS_OF_TYPE[a.type], parent_id: null, active: a.active !== false, current_balance: 0,
-  })));
+  const accounts = accountsOf(companies, book);
   const inRange = lines.filter((l) => l.month >= months[0] && l.month <= months.at(-1));
-  const toLine = (l, period) => ({ realmId: l.realmId, accountId: l.accountId, accountName: l.account, grp: l.grp, period, amount: l.amount });
   const monthBuckets = months.map((m) => ({ key: m, label: m }));
   const companyBuckets = companies.map((c) => ({ key: c.realmId, label: c.name }));
   return {
@@ -48,6 +44,25 @@ export function officePl({ companies, book, lines, months }) {
     companies: view({ accounts, lines: inRange.map((l) => toLine(l, l.realmId)), buckets: companyBuckets }),
   };
 }
+
+/**
+ * The same profit and loss with one column per office (the Compare view): offices [{ key, name, companies }], the
+ * lines of every company of an office land in that office's column; `total` on every line = all offices together.
+ * Accounts merge across offices by section, type and account path (the book should be canonical across all of them).
+ */
+export function comparePl({ offices, book, lines, months }) {
+  const companies = offices.flatMap((o) => o.companies);
+  const officeOf = {};
+  for (const o of offices) for (const c of o.companies) officeOf[c.realmId] = o.key;
+  const inRange = lines.filter((l) => l.month >= months[0] && l.month <= months.at(-1) && officeOf[l.realmId]);
+  return view({ accounts: accountsOf(companies, book), lines: inRange.map((l) => toLine(l, officeOf[l.realmId])), buckets: offices.map((o) => ({ key: o.key, label: o.name })) });
+}
+
+const accountsOf = (companies, book) => companies.flatMap((c) => Object.values(book(c.realmId)).filter((a) => CLASS_OF_TYPE[a.type]).map((a) => ({
+  office_realm_id: c.realmId, account_id: a.id, name: a.name, fully_qualified_name: a.fullName || a.name, account_type: a.type, account_sub_type: a.subType || null,
+  classification: a.classification || CLASS_OF_TYPE[a.type], parent_id: null, active: a.active !== false, current_balance: 0,
+})));
+const toLine = (l, period) => ({ realmId: l.realmId, accountId: l.accountId, accountName: l.account, grp: l.grp, period, amount: l.amount });
 
 /** Per-month revenue and net income as booked, for the trend charts. lines as above. */
 export function monthlyPl(lines, months) {

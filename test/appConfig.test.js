@@ -37,6 +37,21 @@ test('invalid values fail at load time', () => {
   assert.throws(() => loadAppConfig(tmp({ charts: { main: { options: ['pie'] } } })), /charts\.main\.options/);
   assert.throws(() => loadAppConfig(tmp({ charts: { office: { default: 'ranked', options: ['lines'] } } })), /charts\.office\.default/);
   assert.equal(loadAppConfig(tmp({ charts: { office: { default: 'small', options: ['small', 'lines'] } } })).charts.office.default, 'small');
+  // Header period buttons and the Sync now button (2026-10-28).
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { periodPicker: 'tabs' } })), /dashboard\.periodPicker/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { periods: ['month', 'week'] } })), /dashboard\.periods/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { periods: ['month'], defaultPeriod: 'ytd' } })), /dashboard\.defaultPeriod/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { syncButton: 'sometimes' } })), /dashboard\.syncButton/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { syncStaleHours: 0 } })), /dashboard\.syncStaleHours/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { basis: { show: true, options: ['accrual', 'cash'], available: ['cash'], default: 'accrual' } } })), /dashboard\.basis\.default/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { basis: { show: true, options: ['accrual'], available: ['cash'], default: 'cash' } } })), /dashboard\.basis\.available/);
+  assert.throws(() => loadAppConfig(tmp({ officesSheet: { controls: 'sidebar' } })), /officesSheet\.controls/);
+  assert.deepEqual(loadAppConfig(appConfigPath).dashboard.basis.available, ['accrual', 'cash'], 'cash basis is pulled since 2026-10-28');
+  assert.throws(() => loadAppConfig(tmp({ sync: { cashBasis: 'yes' } })), /sync\.cashBasis/);
+  assert.throws(() => loadAppConfig(tmp({ sync: { cashBasis: false }, dashboard: { basis: { show: true, options: ['accrual', 'cash'], available: ['accrual', 'cash'], default: 'accrual' } } })), /sync\.cashBasis is false/);
+  const live = loadAppConfig(appConfigPath);
+  assert.deepEqual([live.dashboard.periodPicker, live.dashboard.periods, live.dashboard.defaultPeriod, live.dashboard.syncButton], ['buttons', ['month', 'quarter', 'ytd', 'custom'], 'month', 'stale'], 'VJ 2026-10-29: Last month | Last quarter | YTD | Custom (the year buttons dropped again); Sync now only when stale');
+  assert.equal(live.dashboard.basis.default, 'cash', 'VJ 2026-10-29: cash basis by default');
 });
 
 test('metrics: formulas, ratios and validation', async () => {
@@ -61,4 +76,16 @@ test('analysis and unlimited compare validation', () => {
   assert.throws(() => loadAppConfig(tmp({ analysis: { topN: 20 } })), /analysis.topN/);
   assert.equal(loadAppConfig(tmp({ compare: { maxOffices: 6 } })).compare.maxOffices, 6);
   assert.throws(() => loadAppConfig(tmp({ compare: { maxOffices: 0 } })), /compare.maxOffices/);
+});
+
+test('dashboard.tabs picks the tabs shown; defaultTab must be one of them', () => {
+  assert.equal(loadAppConfig(path.join(os.tmpdir(), 'does-not-exist.json')).dashboard.tabs, null, 'default: every enabled tab');
+  assert.deepEqual(loadAppConfig(tmp({ dashboard: { defaultTab: 'executive', tabs: ['executive', 'officesSheet', 'kpi'] } })).dashboard.tabs, ['executive', 'officesSheet', 'kpi']);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { tabs: [] } })), /dashboard\.tabs/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { tabs: ['budget'] } })), /dashboard\.tabs/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { defaultTab: 'executive', tabs: ['kpi'] } })), /dashboard\.defaultTab must be one of dashboard\.tabs/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { defaultTab: 'budget' } })), /dashboard\.defaultTab/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { showHeader: 'no' } })), /dashboard.showHeader/);
+  assert.throws(() => loadAppConfig(tmp({ dashboard: { officePicker: 'chips' } })), /dashboard.officePicker/);
+  assert.equal(loadAppConfig(tmp({ dashboard: { officePicker: 'companies' } })).dashboard.officePicker, 'companies');
 });

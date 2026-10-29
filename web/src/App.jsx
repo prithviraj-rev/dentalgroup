@@ -13,6 +13,7 @@ import CategoryCompare from './components/CategoryCompare.jsx';
 import GroupOverview from './components/GroupOverview.jsx';
 import CashBalance from './components/CashBalance.jsx';
 import Offices from './components/Offices.jsx';
+import KpiDashboard from './components/KpiDashboard.jsx';
 import Toast from './components/Toast.jsx';
 
 const TABS = [
@@ -22,11 +23,34 @@ const TABS = [
   { id: 'categories', label: 'Category compare', enabled: (c) => c.categoryView?.enabled !== false },
   { id: 'offices', label: 'Offices', enabled: (c) => c.offices?.enabled !== false },
   { id: 'officesSheet', label: (c) => c.officesSheet?.label || 'Financial KPIs', enabled: (c) => c.offices?.enabled !== false && c.officesSheet?.enabled !== false },
+  { id: 'kpi', label: (c) => c.kpiDashboard?.label || 'KPI dashboard', enabled: (c) => c.offices?.enabled !== false && c.kpiDashboard?.enabled !== false && (c.kpiDashboard?.source !== 'officesSheet' || c.officesSheet?.enabled !== false) },
   { id: 'group', label: 'Group overview', enabled: (c) => c.groupOverview?.enabled !== false },
   { id: 'cash', label: 'Cash & balance sheet', enabled: (c) => c.finance?.enabled !== false },
   { id: 'coa', label: 'Chart of accounts', enabled: (c) => c.chartOfAccounts.enabled },
 ];
+// app.config.json dashboard.tabs: the tab ids to show (null = every enabled tab).
+const tabShown = (t, c) => t.enabled(c) && (!Array.isArray(c.dashboard.tabs) || c.dashboard.tabs.includes(t.id));
 const CATEGORY = 'cat:'; // office filter value for an office category: cat:<dimension id>:<category label>
+
+/**
+ * dashboard.periodPicker = buttons: the months actually shown come from the period button, anchored on the last full
+ * month with data (Custom = the header From / To). The Financial KPIs API gets the same months plus the period key for its label.
+ */
+function periodRange(period, filters, lastFull) {
+  if (!period || period === 'custom' || !lastFull) return { from: filters.from, to: filters.to };
+  if (/^year:\d{4}$/.test(period)) { // one calendar year; the running year ends at the last full month
+    const yy = period.slice(5);
+    const to = `${yy}-12` < lastFull ? `${yy}-12` : lastFull;
+    return { from: `${yy}-01` <= to ? `${yy}-01` : to, to };
+  }
+  const y = Number(lastFull.slice(0, 4));
+  if (period === 'month') return { from: lastFull, to: lastFull };
+  if (period === 'quarter') { const m = Number(lastFull.slice(5, 7)); const end = m % 3 === 0 ? lastFull : addMonths(lastFull, -(m % 3)); return { from: addMonths(end, -2), to: end }; }
+  if (period === 'ytd') return { from: `${y}-01`, to: lastFull };
+  if (period === 'lastYear') return { from: `${y - 1}-01`, to: `${y - 1}-12` };
+  if (period === 'ttm') return { from: addMonths(lastFull, -11), to: lastFull };
+  return { from: filters.from, to: filters.to };
+}
 
 /** Initial UI state from app.config.json, overridden by anything in the URL. */
 function initialState(config) {
@@ -34,13 +58,17 @@ function initialState(config) {
   const url = readUrlState();
   const office = url.office || d.defaultOffice;
   const isList = office.includes(',');
+  // dashboard.officePicker = companies: no Office dropdown; the picked companies are the filter (none = all).
+  const chips = d.officePicker === 'companies';
   return {
     filters: {
-      office: isList ? COMPARE : office,
-      compare: isList ? office.split(',').slice(0, config.compare.maxOffices ?? undefined) : [],
+      office: isList || chips ? COMPARE : office,
+      compare: isList ? office.split(',').slice(0, config.compare.maxOffices ?? undefined) : chips && office !== 'all' && !office.startsWith(CATEGORY) ? [office] : [],
       from: url.from || d.defaultRange.from,
       to: url.to || (d.defaultRange.to === 'current' ? currentMonth() : d.defaultRange.to),
       granularity: url.granularity || d.defaultGranularity,
+      period: d.periodPicker === 'buttons' ? (d.periods.includes(url.period) || (d.periods.includes('years') && /^year:\d{4}$/.test(url.period || '')) ? url.period : d.defaultPeriod) : null,
+      basis: d.basis.available.includes(url.basis) ? url.basis : d.basis.default,
       metric: config.compare.metrics.includes(url.metric) ? url.metric : config.compare.defaultMetric,
     },
     chartTypes: {
@@ -48,7 +76,7 @@ function initialState(config) {
       office: config.charts.office.options.includes(url.officeChart) ? url.officeChart : config.charts.office.default,
     },
     yoy: url.yoy ?? d.defaultYoy,
-    tab: TABS.find((t) => t.id === url.tab && t.enabled(config))?.id || TABS.find((t) => t.id === d.defaultTab && t.enabled(config))?.id || 'dashboard',
+    tab: TABS.find((t) => t.id === url.tab && tabShown(t, config))?.id || TABS.find((t) => t.id === d.defaultTab && tabShown(t, config))?.id || TABS.find((t) => tabShown(t, config))?.id || 'dashboard',
     analysis: {
       metric: config.analysis.metrics.includes(url.ametric) ? url.ametric : config.analysis.defaultMetric,
       by: config.analysis.dimensions.includes(url.by) ? url.by : config.analysis.defaultBy,
@@ -63,11 +91,13 @@ export default function App() {
   const [config, setConfig] = useState(null);
   const [offices, setOffices] = useState([]);
   const [meta, setMeta] = useState(null);
-  const [filters, setFilters] = useState(null);
+  const [rawFilters, setFilters] = useState(null); // what the header controls hold; filters below = what the tabs read
   const [chartTypes, setChartTypes] = useState({ main: 'combo', office: 'lines' });
   const [tab, setTab] = useState('dashboard');
   const [analysis, setAnalysis] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [groups, setGroups] = useState(null); // company groups for the chip picker (dashboard.officePicker = companies)
+  const [groupNames, setGroupNames] = useState({}); // display names for the picker chips (naming.companies)
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [yoy, setYoy] = useState(false);
   const [rangeFromUrl, setRangeFromUrl] = useState(false);
@@ -80,6 +110,19 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [snapped, setSnapped] = useState(false);
+  const headerRef = React.useRef(null);
+
+  // VJ 2026-10-29: the tab row stays frozen at the top while scrolling; tables that scroll with the page stick their
+  // header just under it (CSS variable --hdr = the header's height, read by the Financial KPIs list header).
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const apply = () => document.documentElement.style.setProperty('--hdr', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [config]);
 
   // 1. Config first: everything else (defaults, labels, limits) depends on it.
   useEffect(() => {
@@ -122,9 +165,13 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [o, m, cats] = await Promise.all([api.offices(), api.meta(), api.officeCategories().catch(() => ({ dimensions: [] }))]);
+        const groupsBase = config.officesSheet?.enabled !== false && config.offices?.enabled !== false ? config.officesSheet.apiPath : 'office-view';
+        const [o, m, cats, g] = await Promise.all([api.offices(), api.meta(), api.officeCategories().catch(() => ({ dimensions: [] })),
+          config.dashboard.officePicker === 'companies' && config.offices?.enabled !== false ? api.officeGroups(groupsBase).catch(() => ({ groups: null })) : Promise.resolve({ groups: null })]);
         if (cancelled) return;
         setOffices(o);
+        setGroups(g.groups);
+        setGroupNames(g.names || {});
         setCategories(cats.dimensions);
         setCategoriesLoaded(true);
         setMeta(m);
@@ -143,8 +190,14 @@ export default function App() {
     return () => { cancelled = true; };
   }, [config, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Period buttons: the window is anchored on the last full month that has data (never the unfinished current month).
+  const lastFull = useMemo(() => { const prev = addMonths(currentMonth(), -1); return meta?.maxPeriod && meta.maxPeriod < prev ? meta.maxPeriod : prev; }, [meta]);
+  const filters = useMemo(() => (rawFilters && config?.dashboard.periodPicker === 'buttons' ? { ...rawFilters, ...periodRange(rawFilters.period, rawFilters, lastFull) } : rawFilters), [rawFilters, config, lastFull]);
+  // The period buttons: "years" in dashboard.periods becomes one button per calendar year (dashboard.yearButtons of them, latest first).
+  const periodOptions = useMemo(() => (config ? config.dashboard.periods.flatMap((p) => (p === 'years' ? Array.from({ length: config.dashboard.yearButtons }, (_, i) => `year:${Number(lastFull.slice(0, 4)) - i}`) : [p])) : []), [config, lastFull]);
+  const chipPicker = config?.dashboard.officePicker === 'companies';
   const isCompare = filters?.office === COMPARE;
-  const compareReady = isCompare && filters.compare.length >= (config?.compare.minOffices ?? 2);
+  const compareReady = isCompare && (chipPicker || filters.compare.length >= (config?.compare.minOffices ?? 2));
   // An office category selected in the office picker: the combined figures of its offices.
   const categoryKey = filters?.office?.startsWith(CATEGORY) ? filters.office.slice(CATEGORY.length) : null;
   const category = useMemo(() => {
@@ -155,8 +208,8 @@ export default function App() {
     return cat ? { dimension: dim.label, label: cat.label, realmIds: cat.realmIds } : { dimension: '', label: categoryKey.slice(i + 1), realmIds: [] };
   }, [categoryKey, categories]);
   // What the API gets as `office`: all | realmId | id,id,...
-  const officeParam = isCompare ? filters.compare.join(',') : category ? (category.realmIds.join(',') || '__none__') : filters?.office;
-  const singleOffice = !isCompare && !category && filters?.office !== 'all';
+  const officeParam = isCompare ? (filters.compare.join(',') || 'all') : category ? (category.realmIds.join(',') || '__none__') : filters?.office;
+  const singleOffice = isCompare ? filters.compare.length === 1 : !category && filters?.office !== 'all';
   const waitingForCategory = Boolean(categoryKey) && !categoriesLoaded;
 
   // Keep the URL in sync so the view can be shared.
@@ -164,13 +217,13 @@ export default function App() {
     if (!filters) return;
     writeUrlState({
       tab: tab !== (config.dashboard.defaultTab || 'dashboard') ? tab : null,
-      office: category ? null : officeParam, cat: categoryKey, from: filters.from, to: filters.to, granularity: filters.granularity, yoy: yoy === config.dashboard.defaultYoy ? null : yoy ? '1' : '0',
+      office: category ? null : officeParam, cat: categoryKey, period: rawFilters.period, basis: rawFilters.basis !== config.dashboard.basis.default ? rawFilters.basis : null, from: rawFilters.from, to: rawFilters.to, granularity: filters.granularity, yoy: yoy === config.dashboard.defaultYoy ? null : yoy ? '1' : '0',
       metric: isCompare ? filters.metric : null,
       mainChart: chartTypes.main !== config.charts.main.default ? chartTypes.main : null,
       officeChart: chartTypes.office !== config.charts.office.default ? chartTypes.office : null,
       ...(tab === 'analysis' && analysis ? { ametric: analysis.metric, by: analysis.by, achart: analysis.chart } : {}),
     });
-  }, [filters, yoy, officeParam, isCompare, chartTypes, config, tab, analysis, categoryKey, category]);
+  }, [filters, rawFilters, yoy, officeParam, isCompare, chartTypes, config, tab, analysis, categoryKey, category]);
 
   const chartOptions = (which) => (config.charts.showPicker ? config.charts[which].options : null);
   const setChartType = (which) => (t) => setChartTypes((c) => ({ ...c, [which]: t }));
@@ -258,33 +311,38 @@ export default function App() {
     );
   }
 
+  const inlineControls = tab === 'officesSheet' && config.officesSheet?.controls === 'inline';
+  const controlsEl = <Controls config={config} offices={offices} filters={rawFilters} onChange={setFilters} periods={periodOptions} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact={tab !== 'dashboard'} categories={categories} groups={groups} names={groupNames} canSync={meta?.can?.sync !== false} lastSync={meta?.lastSync || null} inline={inlineControls} />;
   const metricLabel = metricOf(filters.metric).label;
   const compareMax = config.compare.maxOffices ?? undefined;
-  const visibleTabs = TABS.filter((t) => t.enabled(config));
+  const visibleTabs = TABS.filter((t) => tabShown(t, config));
 
   return (
-    <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
-      <header className="mb-5 flex flex-col gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <div className="w-full px-1 pb-1">
+      <header ref={headerRef} className="sticky top-0 z-20 -mx-1 mb-1 flex flex-col gap-0 bg-page px-1">
+        {config.dashboard.showHeader !== false && ( // app.config.json dashboard.showHeader: title + "N offices connected · last sync · data range" line
           <div>
             <h1 className="text-lg font-semibold sm:text-xl">{config.dashboard.title}</h1>
             <p className="text-sm text-ink2">{subtitle}</p>
           </div>
-          {meta?.can?.manageConnections !== false && <a className="text-sm text-accent hover:underline" href={`${API_BASE}/connections`} target="_blank" rel="noreferrer">Manage connections ↗</a>}
-        </div>
-        {visibleTabs.length > 1 && (
-          <nav className="-mx-3 flex gap-1 overflow-x-auto border-b border-[var(--line)] px-3 [scrollbar-width:none] sm:mx-0 sm:px-0" role="tablist">
-            {visibleTabs.map((t) => (
-              <button
-                key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-                className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm ${tab === t.id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink2 hover:text-ink'}`}
-              >
-                {typeof t.label === 'function' ? t.label(config) : t.label}
-              </button>
-            ))}
-          </nav>
         )}
-        <Controls config={config} offices={offices} filters={filters} onChange={setFilters} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact={tab !== 'dashboard'} categories={categories} canSync={meta?.can?.sync !== false} />
+        {/* Tabs on the top line (Manage connections at its right); the filters sit below, or in the page's own bar (officesSheet.controls = inline). */}
+        <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b border-[var(--line)]">
+          {visibleTabs.length > 1 ? (
+            <nav className="flex shrink-0 gap-1 overflow-x-auto [scrollbar-width:none]" role="tablist">
+              {visibleTabs.map((t) => (
+                <button
+                  key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-1.5 text-sm ${tab === t.id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink2 hover:text-ink'}`}
+                >
+                  {typeof t.label === 'function' ? t.label(config) : t.label}
+                </button>
+              ))}
+            </nav>
+          ) : <span />}
+          {meta?.can?.manageConnections !== false && <a className="pb-1.5 text-xs text-accent hover:underline" href={`${API_BASE}/connections`} target="_blank" rel="noreferrer">Manage connections ↗</a>}
+        </div>
+        {!inlineControls && controlsEl}
         {category && <p className="text-xs text-ink2">Showing {category.dimension ? `${category.dimension}: ` : ''}<b>{category.label}</b>, {category.realmIds.length} {category.realmIds.length === 1 ? 'office' : 'offices'} combined.</p>}
       </header>
 
@@ -318,12 +376,21 @@ export default function App() {
       ) : tab === 'offices' ? (
         <Offices filters={filters} officeParam={officeParam} singleOffice={singleOffice} reloadKey={reloadKey} />
       ) : tab === 'officesSheet' ? (
-        <Offices key="sheet" filters={filters} officeParam={officeParam} singleOffice={singleOffice} reloadKey={reloadKey} base={config.officesSheet.apiPath} />
+        <Offices key="sheet" filters={filters} officeParam={officeParam} singleOffice={singleOffice} reloadKey={reloadKey} base={config.officesSheet.apiPath}
+          controls={inlineControls ? (parts) => <Controls config={config} offices={offices} filters={rawFilters} onChange={setFilters} periods={periodOptions} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact categories={categories} groups={groups} names={groupNames} canSync={meta?.can?.sync !== false} lastSync={meta?.lastSync || null} inline parts={parts} /> : null}
+          customRange={{ from: rawFilters.from, to: rawFilters.to }} />
       ) : tab === 'group' ? (
         <GroupOverview filters={filters} officeParam={officeParam} reloadKey={reloadKey}
           onOpenOffice={(id) => { setFilters((f) => ({ ...f, office: id })); setTab('dashboard'); window.scrollTo(0, 0); }} />
       ) : (
         <CashBalance filters={filters} officeParam={officeParam} reloadKey={reloadKey} />
+      ))}
+
+      {!error && !waitingForCategory && tab === 'kpi' && (isCompare && !compareReady ? (
+        <div className="card px-6 py-12 text-center text-sm text-ink2">Pick at least {config.compare.minOffices} offices above, or choose All offices, a category or a single office.</div>
+      ) : (
+        <KpiDashboard config={config} filters={filters} officeParam={officeParam} reloadKey={reloadKey}
+          onOpenOffice={(id) => { setFilters((f) => ({ ...f, office: id })); setTab(config.kpiDashboard?.source === 'offices' ? 'offices' : 'officesSheet'); window.scrollTo(0, 0); }} />
       ))}
 
       {!error && !waitingForCategory && tab === 'coa' && (isCompare && !compareReady ? (

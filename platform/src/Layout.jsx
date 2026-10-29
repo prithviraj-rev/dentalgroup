@@ -44,6 +44,9 @@ export default function Layout() {
   const match = useMatch('/o/:orgId/*');
   const org = match ? me.orgs.find((o) => String(o.id) === match.params.orgId) : null;
   const [open, setOpen] = useState(false);
+  // Desktop sidebar folded to icons (remembered per browser).
+  const [folded, setFolded] = useState(() => { try { return localStorage.getItem('lv.sidebar') === 'folded'; } catch { return false; } });
+  const toggleFold = () => setFolded((f) => { const n = !f; try { localStorage.setItem('lv.sidebar', n ? 'folded' : 'open'); } catch { /* private window */ } return n; });
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
 
@@ -55,51 +58,62 @@ export default function Layout() {
   const navItems = org ? cfg.navigation.org.filter((n) => n.enabled !== false && (!n.permission || can(org, n.permission))) : [];
   const roleLabel = org ? cfg.roles[org.role]?.label : me.user.isPlatformAdmin ? cfg.roles.platform_admin.label : '';
 
-  const sidebar = (
-    <nav className="flex h-full flex-col gap-4 p-3">
-      <div className="flex items-center gap-2 px-1 pt-1">
+  const sidebar = (mini = false) => (
+    <nav className={`flex h-full flex-col gap-4 ${mini ? 'items-center p-2' : 'p-3'}`}>
+      <div className={`flex items-center gap-2 pt-1 ${mini ? '' : 'px-1'}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: cfg.platform.primaryColor }}>{cfg.platform.logoText}</span>
-        <span className="font-semibold">{cfg.platform.name}</span>
+        {!mini && <span className="font-semibold">{cfg.platform.name}</span>}
       </div>
 
       {me.user.isPlatformAdmin && (
         <div className="flex flex-col gap-0.5">
-          <div className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted">Platform</div>
+          {!mini && <div className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted">Platform</div>}
           {cfg.navigation.platform.filter((n) => n.enabled !== false).map((n) => (
-            <NavLink key={n.id} to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Icon name={n.icon} />{n.label}
+            <NavLink key={n.id} to="/admin" end title={mini ? n.label : undefined} className={({ isActive }) => `nav-item ${mini ? 'justify-center' : ''} ${isActive ? 'active' : ''}`}>
+              <Icon name={n.icon} />{!mini && n.label}
             </NavLink>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <div className="px-2 text-[11px] uppercase tracking-wide text-muted">Organization</div>
-        <OrgSwitcher orgs={me.orgs} current={org} />
-      </div>
+      {!mini && (
+        <div className="flex flex-col gap-2">
+          <div className="px-2 text-[11px] uppercase tracking-wide text-muted">Organization</div>
+          <OrgSwitcher orgs={me.orgs} current={org} />
+        </div>
+      )}
 
       {org && (
         <div className="flex flex-col gap-0.5">
           {navItems.map((n) => (
-            <NavLink key={n.id} to={`/o/${org.id}/${n.id}`} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Icon name={n.icon} />{n.label}
+            <NavLink key={n.id} to={`/o/${org.id}/${n.id}`} title={mini ? n.label : undefined} className={({ isActive }) => `nav-item ${mini ? 'justify-center' : ''} ${isActive ? 'active' : ''}`}>
+              <Icon name={n.icon} />{!mini && n.label}
             </NavLink>
           ))}
         </div>
       )}
 
-      <div className="mt-auto border-t border-[var(--line)] pt-3">
-        <div className="px-1 text-sm font-medium">{me.user.name}</div>
-        <div className="truncate px-1 text-xs text-muted">{me.user.email}</div>
-        {roleLabel && <div className="px-1 text-xs text-ink2">{roleLabel}</div>}
-        <button type="button" className="btn btn-ghost btn-sm mt-2 w-full justify-start" onClick={signOut}>Sign out</button>
+      <div className={`mt-auto border-t border-[var(--line)] pt-3 ${mini ? 'w-full' : ''}`}>
+        {!mini && <>
+          <div className="px-1 text-sm font-medium">{me.user.name}</div>
+          <div className="truncate px-1 text-xs text-muted">{me.user.email}</div>
+          {roleLabel && <div className="px-1 text-xs text-ink2">{roleLabel}</div>}
+          <button type="button" className="btn btn-ghost btn-sm mt-2 w-full justify-start" onClick={signOut}>Sign out</button>
+        </>}
       </div>
     </nav>
   );
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-[var(--line)] bg-surface lg:block">{sidebar}</aside>
+      <aside className={`relative sticky top-0 hidden h-screen shrink-0 border-r border-[var(--line)] bg-surface transition-[width] lg:block ${folded ? 'w-14' : 'w-60'}`}>
+        {sidebar(folded)}
+        {/* Collapse handle: a small round button half over the sidebar edge, in the middle of the panel. */}
+        <button type="button" onClick={toggleFold} aria-pressed={folded} aria-label={folded ? 'Expand the menu' : 'Collapse the menu'} title={folded ? 'Expand the menu' : 'Collapse the menu'}
+          className="absolute -right-3 top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--line)] bg-surface text-ink2 shadow-sm hover:bg-page hover:text-ink">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: folded ? 'rotate(180deg)' : 'none' }}><path d="M15 6l-6 6 6 6" /></svg>
+        </button>
+      </aside>
       {open && (
         <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setOpen(false)}>
           <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto bg-surface shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -107,7 +121,7 @@ export default function Layout() {
               className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-lg text-ink2 hover:bg-page">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
-            {sidebar}
+            {sidebar(false)}
           </aside>
         </div>
       )}
@@ -120,7 +134,7 @@ export default function Layout() {
           </button>
           <span className="truncate font-medium">{org?.name || cfg.platform.name}</span>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <main className="w-full px-3 py-3 sm:px-4 sm:py-4">
           <Outlet />
         </main>
       </div>

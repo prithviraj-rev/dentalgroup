@@ -73,9 +73,9 @@ html, body {
   border: 1px solid var(--ring);
   border-radius: 8px;
   color: var(--ink);
-  font-size: 14px;
-  padding: 6px 10px;
-  height: 36px;
+  font-size: 13px;
+  padding: 4px 10px;
+  height: 32px;
 }
 .control:focus-visible {
   outline: 2px solid var(--series-1);
@@ -90,7 +90,7 @@ html, body {
   overflow-x: auto;
   scrollbar-width: none;
   background: var(--surface);
-  height: 36px;
+  height: 32px;
 }
 .seg button {
   flex: 0 0 auto;
@@ -102,6 +102,7 @@ html, body {
 .seg button + button {
   border-left: 1px solid var(--ring);
 }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 .seg button[aria-pressed='true'] {
   background: var(--series-1);
   color: #fff;
@@ -126,9 +127,36 @@ html, body {
 }
 
 .seg.seg-sm {
-  height: 28px;
+  height: 32px;
 }
 .seg.seg-sm button {
   padding: 0 8px;
   font-size: 12px;
 }
+
+/* Column headers in capitals (VJ 2026-10-28); the muted second line of a header (period, "As of") stays as written. */
+thead th { text-transform: uppercase; letter-spacing: 0.02em; }
+thead th .text-muted, thead th .text-accent { text-transform: none; letter-spacing: 0; }
+
+/* Button bars of the Financial KPIs pages: left group, then Accrual / Cash right after it (VJ 2026-10-29: not centred, close to the
+   first buttons), the period buttons at the right. The zones wrap as whole units on a narrow screen: the left group keeps its line,
+   Accrual / Cash and the period drop to a second line together (VJ 2026-10-29: the laptop screen split the buttons oddly). */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 16px; width: 100%; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: color-mix(in oklab, var(--page) 75%, var(--surface)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; flex: 0 0 auto; max-width: 100%; }
+.toolbar > div:first-child { flex: 0 1 auto; }
+.toolbar > div:last-child { margin-left: auto; }
+.toolbar > span:empty { display: none; }
+/* The identity line of a table bar (back, title, period, what is shown) always takes its own row, so the control rows below
+   stack the same way on every panel whatever its width (2026-10-29: Synopsis and Detailed wrapped differently side by side). */
+.toolbar > div.toolbar-head { flex: 1 0 100%; }
+/* The banner of a Compare / combined page: stays under the frozen tab row while the page scrolls (VJ 2026-10-29). */
+.toolbar.banner { position: sticky; top: var(--hdr, 0px); z-index: 15; }
+/* Combined / office page bars (period-left): the period buttons and Export CSV follow the other controls from the left; on Compare
+   (full width) they stay at the right edge (2026-10-29). */
+.toolbar.period-left > div:last-child { margin-left: 0; }
+.toolbar .toolbar-title { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.toolbar .toolbar-note { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.toolbar .toolbar-note.wrap { white-space: normal; } /* "Combine: A, B, C, …" may run over several lines */
+
+/* Thin vertical lines between the columns of the Compare and combined-view tables (VJ 2026-10-29: the figures were hard to read across). */
+.cols-lined th + th, .cols-lined th + td, .cols-lined td + td { border-left: 1px solid var(--line); }

@@ -11,6 +11,8 @@ const EXPENSE = new Set(['COGS', 'Expenses', 'OtherExpenses']);
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 const matchAcct = (re, r) => Boolean(re && (re.test(r.account) || (r.fullName && re.test(r.fullName))));
+/** "554.1 Office Expense" -> [554, 1]; no leading number -> null. */
+export const accountNumber = (name) => { const m = /^\s*(\d+(?:\.\d+)*)/.exec(String(name)); return m ? m[1].split('.').map(Number) : null; };
 
 // ---------- Offices ----------
 
@@ -28,9 +30,12 @@ export function resolveOffices(companies, cfg, categoryOf = () => null) {
     const first = o.companies[0];
     const city = o.city || first.city || null;
     const state = o.state || first.state || null;
-    const name = o.name || (city ? fill(cfg.naming.pattern, { city, state, company: first.name }) : fill(cfg.naming.fallback, { city, state, company: first.name }));
+    // naming.companies[<first company's realm id>] = { name, short, note } overrides the pattern (display names, e.g. the DBA).
+    const custom = cfg.naming.companies?.[first.realmId] || null;
+    const name = o.name || custom?.name || (city ? fill(cfg.naming.pattern, { city, state, company: first.name }) : fill(cfg.naming.fallback, { city, state, company: first.name }));
     const key = `${slug(name)}-${first.realmId.slice(-4)}`;
-    out.push({ key, name, city, state, companies: o.companies, aliases: o.aliases || [], explicit: Boolean(o.explicit), id: o.id ?? null, saved: Boolean(o.saved) });
+    const note = custom?.note ?? (o.companies.length > 1 ? cfg.naming.pairNote || null : null);
+    out.push({ key, name, short: custom?.short || null, note, city, state, companies: o.companies, aliases: o.aliases || [], explicit: Boolean(o.explicit), id: o.id ?? null, saved: Boolean(o.saved) });
   };
   for (const o of cfg.offices) {
     const present = o.companies.filter((id) => byId[id]);
@@ -52,6 +57,10 @@ export function resolveOffices(companies, cfg, categoryOf = () => null) {
       else if (cfg.autoPair.standaloneSubDso) autos.push({ companies: [{ realmId: s.realmId, name: s.officeName, city: s.city, state: s.state }] });
     }
     for (const a of autos) finish(a);
+    // autoPair.otherCompanies = offices: every company outside the pairing categories (real estate, holding, ...) is its own office.
+    if (cfg.autoPair.otherCompanies === 'offices') {
+      for (const c of rest) if (!inCats(c) && !isSub(c)) finish({ companies: [{ realmId: c.realmId, name: c.officeName, city: c.city, state: c.state }] });
+    }
   }
   // Two offices with the same name (e.g. two companies registered in the same city) get the company name appended.
   const count = {};
@@ -73,11 +82,48 @@ export function combinedOffices(saved, companies) {
   }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * page.portfolio.buckets: the bucket key of an office. A bucket listing one of the office's companies wins (first in list
+ * order), else the bucket whose categories hold the first company's category, else buckets.rest.
+ */
+export function bucketOf(office, buckets, categoryOf = () => null) {
+  if (!buckets) return null;
+  const ids = office.companies.map((c) => c.realmId);
+  const explicit = buckets.list.find((b) => b.companies.some((id) => ids.includes(id)));
+  if (explicit) return explicit.key;
+  const cat = categoryOf(ids[0]);
+  const byCat = cat && buckets.list.find((b) => b.categories.includes(cat));
+  return byCat ? byCat.key : buckets.rest;
+}
+
 // ---------- Periods ----------
 
 /** The KPI window ending at asOf (YYYY-MM) and the same window a year earlier. */
-export function periodWindow(asOf, period, fyStart = 1) {
-  let from = asOf; let label = 'Month';
+export function periodWindow(asOf, period, fyStart = 1, customFrom = null) {
+  let from = asOf; let label = 'Last month';
+  if (period === 'lastYear') {
+    // The last full fiscal year ending at or before asOf.
+    const endMonth = fyStart === 1 ? 12 : fyStart - 1;
+    const mm = String(endMonth).padStart(2, '0');
+    let end = `${asOf.slice(0, 4)}-${mm}`;
+    if (end > asOf) end = `${Number(asOf.slice(0, 4)) - 1}-${mm}`;
+    from = addMonths(end, -11);
+    return { key: period, label: `Year ${fyStart === 1 ? end.slice(0, 4) : `to ${end}`}`, from, to: end, priorFrom: addMonths(from, -12), priorTo: addMonths(end, -12) };
+  }
+  if (/^year:\d{4}$/.test(period)) {
+    // One calendar (fiscal) year; a year still running ends at asOf.
+    const y = Number(period.slice(5));
+    const fy = String(fyStart).padStart(2, '0');
+    from = `${y}-${fy}`;
+    let end = addMonths(from, 11);
+    if (end > asOf) end = asOf;
+    if (from > asOf) from = asOf;
+    return { key: period, label: String(y), from, to: end, priorFrom: addMonths(from, -12), priorTo: addMonths(end, -12) };
+  }
+  if (period === 'custom') {
+    from = customFrom && customFrom <= asOf ? customFrom : asOf;
+    return { key: period, label: 'Custom', from, to: asOf, priorFrom: addMonths(from, -12), priorTo: addMonths(asOf, -12) };
+  }
   if (period === 'quarter') {
     const m = Number(asOf.slice(5, 7));
     const endQ = m % 3 === 0 ? asOf : addMonths(asOf, -(m % 3)); // last full calendar quarter
@@ -119,6 +165,7 @@ export function eliminateInternal(lines, office, cfg) {
   if (office.companies.length < 2) return out;
   const cand = { expense: [], income: [] };
   for (const r of lines) {
+    if (itemRow(r, cfg)) continue; // an item row shows its accounts as booked: never an internal charge
     const partner = r.entity && isPartnerName(r.entity, office, r.realmId);
     if (EXPENSE.has(r.grp) && (partner || matchAcct(cfg.internal.expense.re, r))) { r.internalSide = 'expense'; cand.expense.push(r); }
     else if ((INCOME.has(r.grp) || OTHER_INCOME.has(r.grp)) && (partner || matchAcct(cfg.internal.income.re, r))) { r.internalSide = 'income'; cand.income.push(r); }
@@ -136,8 +183,13 @@ export function eliminateInternal(lines, office, cfg) {
 
 // ---------- Classification ----------
 
+/** The row with role item (shown as booked, outside every subtotal) that takes this line, if any. Checked before everything else. */
+export const itemRow = (r, cfg) => cfg.rows.find((row) => row.role === 'item' && matchAcct(row.re, r)) || null;
+
 /** Which statement row (or memo line) a P&L line belongs to. */
 export function classifyLine(r, cfg) {
+  const item = itemRow(r, cfg);
+  if (item) return { kind: 'row', key: item.key };
   if (INCOME.has(r.grp)) {
     const coll = cfg.rows.find((x) => x.role === 'collections');
     // A collections row with its own account pattern takes only those accounts; other income accounts go to a memo line.
@@ -307,11 +359,21 @@ export function buildStatement(lines, office, cfg, { window, months, cashFlow = 
     ebitda.months[m] = round2(before - (fees.months[m] || 0));
     if (cf) cf.months[m] = round2(cashFlow[m] || 0);
   }
+  // statement.sortAccounts: amount = largest first (default); number = by the account number at the start of the
+  // name (512 before 524 before 554.1), accounts without a number and the allocated payroll-tax line last.
+  const byNumber = (a, b) => {
+    if (a.allocated !== b.allocated) return a.allocated ? 1 : -1;
+    const na = accountNumber(a.account); const nb = accountNumber(b.account);
+    if (na && nb) { for (let i = 0; i < Math.max(na.length, nb.length); i++) { const d = (na[i] ?? -1) - (nb[i] ?? -1); if (d) return d; } }
+    else if (na || nb) return na ? -1 : 1;
+    return a.account.localeCompare(b.account);
+  };
+  const byAmount = (a, b) => Math.abs(b.period) - Math.abs(a.period) || a.fullName.localeCompare(b.fullName);
   const finishChildren = (slot) => [...slot.children.values()].map((c) => ({
     account: c.account, fullName: c.fullName, companies: c.companies.size, allocated: Boolean(c.allocated),
     months: Object.fromEntries(Object.entries(c.months).map(([m, v]) => [m, round2(v)])),
     period: sumMonths(c.months, window.from, window.to), prior: sumMonths(c.months, window.priorFrom, window.priorTo),
-  })).sort((a, b) => Math.abs(b.period) - Math.abs(a.period) || a.fullName.localeCompare(b.fullName));
+  })).sort(cfg.statement.sortAccounts === 'number' ? byNumber : byAmount);
   const finishRow = (r) => ({
     key: r.key, label: r.label, role: r.role,
     months: Object.fromEntries(months.map((m) => [m, round2(r.months[m] || 0)])),

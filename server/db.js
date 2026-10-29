@@ -32,6 +32,20 @@ export function openDb(file = config.dbPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_pl_lines_period ON pl_lines (period_start, office_realm_id);
 
+    -- The same P&L report pulled on a CASH basis (sync.cashBasis), for the Accrual | Cash toggle. Same shape as pl_lines.
+    CREATE TABLE IF NOT EXISTS pl_lines_cash (
+      office_realm_id TEXT NOT NULL,
+      office_name     TEXT NOT NULL,
+      account_name    TEXT NOT NULL,
+      account_id      TEXT NOT NULL,
+      grp             TEXT NOT NULL,
+      period_start    TEXT NOT NULL,
+      period_end      TEXT NOT NULL,
+      amount          REAL NOT NULL,
+      UNIQUE (office_realm_id, account_id, period_start)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pl_lines_cash_period ON pl_lines_cash (period_start, office_realm_id);
+
     -- Chart of accounts per company (QBO Account entity), refreshed on every sync.
     CREATE TABLE IF NOT EXISTS accounts (
       office_realm_id      TEXT NOT NULL,
@@ -77,12 +91,13 @@ export function openDb(file = config.dbPath) {
  * date window that no longer appear in the report are removed, so a re-sync never
  * leaves stale months behind. Unique key: (office_realm_id, account_id, period_start).
  */
-export function upsertPlLines(db, realmId, officeName, rows, { startDate, endDate }) {
+export function upsertPlLines(db, realmId, officeName, rows, { startDate, endDate, table = 'pl_lines' }) {
+  if (!['pl_lines', 'pl_lines_cash'].includes(table)) throw new Error(`upsertPlLines: unknown table ${table}`);
   const del = db.prepare(
-    `DELETE FROM pl_lines WHERE office_realm_id = ? AND period_start >= ? AND period_start <= ?`
+    `DELETE FROM ${table} WHERE office_realm_id = ? AND period_start >= ? AND period_start <= ?`
   );
   const ins = db.prepare(`
-    INSERT INTO pl_lines (office_realm_id, office_name, account_name, account_id, grp, period_start, period_end, amount)
+    INSERT INTO ${table} (office_realm_id, office_name, account_name, account_id, grp, period_start, period_end, amount)
     VALUES (@office_realm_id, @office_name, @account_name, @account_id, @grp, @period_start, @period_end, @amount)
     ON CONFLICT (office_realm_id, account_id, period_start) DO UPDATE SET
       office_name  = excluded.office_name,

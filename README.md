@@ -130,8 +130,15 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 
 | Key | Meaning |
 |---|---|
-| `dashboard.title`, `locale`, `currency` | Page title and number formatting. |
+| `dashboard.officePicker` | `select` = the Office dropdown (all offices, a category, one office, Compare offices…); `companies` (since 2026-10-28) = no dropdown, the header always shows the companies as chips in the Financial KPIs groups (`GET /api/office-sheet/groups`, one colour per group, "all" / "none" per group); nothing picked = every company, picks narrow every tab to those companies. |
+| `dashboard.title`, `showHeader`, `locale`, `currency` | Page title and number formatting; `showHeader: false` hides the title and the "N offices connected · last sync · data range" line (off since 2026-10-28). |
 | `dashboard.defaultOffice` | `all`, a realmId, or `id,id` to open in compare mode. |
+| `dashboard.periodPicker`, `periods`, `defaultPeriod` | `range` = From / To / Granularity; `buttons` = Month, Last quarter, YTD, Last year, Custom (from `periods`: month, quarter, ytd, lastYear, ttm, custom) anchored on the last full month with data, Custom shows From / To. |
+| `dashboard.syncButton`, `syncStaleHours` | `always`, `stale` (Sync now only when the last sync is older than `syncStaleHours`) or `never`. |
+| `dashboard.basis` | `{ show, options, available, default }`: the Accrual / Cash toggle as in QuickBooks. Accrual = the ledger built from the raw records; Cash = the P&L report pulled on a cash basis (`sync.cashBasis`, table `pl_lines_cash`), matched to the same accounts. Balances and cash flow always come from the ledger. |
+| `dashboard.yearButtons` | How many calendar-year buttons `years` in `dashboard.periods` adds (latest first, period key `year:<YYYY>`; the running year ends at the last full month). |
+| `sync.cashBasis` | `true` pulls the ProfitAndLoss report a second time with `accounting_method=Cash` on every sync (one extra call per company). Required when `dashboard.basis.available` lists `cash`. |
+| `officesSheet.controls` | `header` (filters in the page header) or `inline` (period buttons, Select companies, basis and Sync inside the Financial KPIs button bar). |
 | `dashboard.defaultRange` | `from`/`to` as `YYYY-MM` (`to: "current"` = this month); `snapToData` snaps to the synced range on load. |
 | `dashboard.defaultGranularity`, `granularities` | Default and available buckets (`month`, `quarter`, `year`). |
 | `dashboard.defaultYoy`, `chartHeights`, `syncToastSeconds` | YoY on by default, chart heights in px, toast durations. |
@@ -208,7 +215,7 @@ fail at startup with a message naming the key. Restart `npm run dev` after editi
 
 ## Executive view
 
-The default tab of the dashboard (`dashboard.defaultTab`). One call, `GET /api/executive?from=&to=&office=`,
+Was the default tab of the dashboard until 2026-10-28, now Financial KPIs (`dashboard.defaultTab`; `dashboard.tabs` lists the tabs shown at all, null = every enabled tab; since 2026-10-27 the dashboard shows only Executive, Financial KPIs and KPI dashboard, the other tabs are still built and their APIs served). One call, `GET /api/executive?from=&to=&office=`,
 returns the selected range and the same range a year earlier. Sections, in order (`config/executive.json`
 → `sections`):
 
@@ -299,19 +306,89 @@ More tabs, each with its own config file and endpoint (`server/finance/`, `serve
   cash flow (operating / investing / financing); profit vs cash conversion; A/R and A/P aging with the most overdue
   parties; top vendors across companies; balance sheet by company.
 
-**Budget** and **Practice KPIs** are no longer tabs in the dashboard (removed 2026-10-20: no QuickBooks budgets
+**Dashboard**, **Analysis**, **Category compare**, **Offices**, **Group overview**, **Cash & balance sheet** and **Chart of accounts** are hidden since 2026-10-27 by `app.config.json` `dashboard.tabs` (code and APIs unchanged). **Budget** and **Practice KPIs** are no longer tabs in the dashboard (removed 2026-10-20: no QuickBooks budgets
 and no practice-system import for this client). Their APIs still exist: `GET /api/finance/budget` (budget vs actual
 from QuickBooks budgets) and `GET/POST /api/practice-kpis` (`config/practice-kpis.json`, CSV / JSON import of
 production, collections, visits, new patients, combined with the P&L).
 
 **Financial KPIs** (`GET /api/office-sheet…`, `config/offices-sheet.json`, `app.config.json` `officesSheet`)
 - The same page as the Offices tab, served by the same code with another row config: every statement row holds
-  exactly the account numbers of column E of the client's Financial KPI sheet, matched at the start of the account
-  name or of any level of its path (402, 503.1 / 504 / 506.3 / 576 / 506.2, 503, 505 / 517, 521, 536, 559, 507,
-  540.1 for Small Equipment Lease, 650), no payroll-tax split, loan payments added to operating cash flow. Accounts
-  the sheet does not assign (500, 501, 502, 586, 560, …) land in Other Expenses; income accounts outside 402 go to
-  the memo line "Income not assigned to a row". The config `extends` `config/offices.json` for everything else
+  exactly the account numbers of column E of the client's Financial KPI sheet (revised 2026-10-26), matched at the
+  start of the account name or of any level of its path. Rows: Net Collections 402 (401 refunds netted); Provider
+  Compensation 503.1 / 504 / 500 / 501; Staff Payroll 502 / 503; Provider Training & Hiring 505 / 517; Marketing 507;
+  Dental Supplies 521; Laboratory 536; Rent / Occupancy 559; Legal & Professional 542; Other Expenses 560 / 554 /
+  512 / 530 / 570 / 524 / 545 / 546 / 544 / 584 / 586 (560 Repairs is not rent, client 2026-10-27); DSO
+  Management Fees 650; Partner's Withdrawal 802.1 / 802.2 (below EBITDA, `role: item`); Operating Cash Flow incl.
+  loan payments; Non Operational Income 801 and Non Operational Expenses 701 (`item` rows under the statement).
+  Payroll Taxes 576 and Benefits 506 are listed under both payroll rows, so they are split in proportion like on the
+  Offices tab. Small Equipment Lease is struck out of the sheet (540 Equipment Lease is left out). Accounts the sheet
+  does not assign (516, 540, 555, 585, other 802.x, …) are left out and totalled under the table; income accounts
+  outside 402 go to "Income not assigned to a row". The config `extends` `config/offices.json` for everything else
   (pairing, internal charges, flags, periods). Combined offices are shared between the two tabs.
+- `page.portfolio` (any Offices config): how the list of offices is shown. `summary` false = no Portfolio heading, Combine
+  companies button or totals tiles; `flags` false = no "Needs attention" chips or flag pills; `tags` false = no
+  "N companies" / "Books to" tags; `combinedList` false = no "Combined offices" section; `label` = heading and first
+  column header. `columns` = the figures shown, in order (a statement row key or `totalExpenses` = cost + other rows + management fees, `operatingCosts` = cost + other rows,
+  `loanPayments` = net loan principal repaid in the period, `withdrawals` = Partner's Withdrawal row + loanPayments,
+  `cash`, `ar`, `ap`, `ebitdaMargin`, `vsPrior`). `buckets` = the offices in fixed groups with a subtotal row each:
+  a bucket takes an office when one of its companies is in `companies`, else when the first company's category
+  (`autoPair.dimension`, the Ledgerview Company type) is in `categories`, else `rest`. With `autoPair.otherCompanies:
+  "offices"` every connected company outside the pairing categories (real estate, holding, construction) is listed as
+  its own office. Combine and Compare only work inside one bucket.
+- Since 2026-10-28 (VJ's call of 2026-10-27) this tab is the product: all 36 companies under their QuickBooks names
+  in the six groups of the client's org-structure sheet (`docs/Company Org Structure Ownership, TIN EIN.xlsx`, Main
+  Sheet): Sabuska, Dental (practice + sub-DSO + management companies), Dental real estate, Non-dental real estate,
+  Construction / development / equipment, Non-operational (sold or dormant), six
+  columns (collections, total expenses incl. pass-through management fees, management fees, office EBITDA, profit
+  withdrawals = Partner's Withdrawal + loan payoff, cash flow), Combine (saved combination, opens the combined statement) and Compare.
+- **Compare** (`GET /api/office-sheet/compare?keys=<office keys>&from=&to=&period=`), two tiers on one page
+  (2026-10-28), both with "All N selected" (the sum) first and one column per picked office, a Values switch
+  (Amounts | % | Both = amount and % as two columns side by side), a click on an office header highlights that
+  column in both tables, Period toggle (month / last full quarter / YTD / TTM), CSV export:
+  1. **Office statement side by side**: the statement rows down the left, each expandable to the QuickBooks accounts
+     behind it in every office (`offices[].accounts[row]`, `consolidated.accounts[row]` merged by account name), % = share
+     of net collections.
+  2. **Combined profit and loss side by side** (`pl`, `comparePl` in `pl.js`: the single-office P&L view with one bucket
+     per office, over the period months, accounts merged by path across the offices): every QuickBooks account as
+     booked, folded to the top-level accounts by default, % = share of income. Only when `page.sections` has `pl`.
+  2026-10-28 call: the "All N selected" column is frozen next to the row labels (Freeze total toggle), office headers
+  take two lines (name over its `short`, e.g. Admire Dental / Branford) so more offices fit left to right, Amounts is
+  the default, the collections row shows 100%, cells are tighter. Open questions for VJ: which of the
+  three management-fee categories is the profit distribution to show on its own line, the loan accounts behind
+  "loan payoff". The non-dental real-estate and non-operational companies are pinned by realm id in `buckets` because the
+  Ledgerview groups do not yet tell them apart; `docs/Consolidated Financials Practices.xlsx` is VJ's manual
+  consolidated P&L (accounts down, one office per column block, % of income, monthly average, add-backs) that the
+  Compare view replaces.
+- **Display names** (`naming.companies`, 2026-10-28): `{ "<realm id of the office's first company>": { name, short?, note? } }`
+  overrides the naming pattern. The Financial KPIs config carries the DBA names of VJ's org-structure sheet (Admire Dental
+  Bakersfield, Maple Tree Dental Easton, Luxia Dental Indianapolis, ...), `Y` before dental real estate, `U` before
+  construction / equipment, `note: "sub-DSO only"` where only the management company is in QuickBooks (Pueblo, Greeley,
+  Fort Collins); `naming.pairNote` ("dental + sub-DSO") is the note for every two-company office. `short` is the second
+  header line in the Compare view and must end the name. Changing a name changes the office key (`<slug>-<realm tail>`).
+- **Header company picker** (`picker`, 2026-10-28): groups by company (practices and management companies under
+  separate headings, unlike the list, which keeps practice + sub-DSO as one row); same rules as `page.portfolio.buckets`.
+  `GET /api/<base>/groups` returns the groups plus `names` (display names) for the chips. On a Compare or combined view
+  (2026-10-29) the popup opens with the view's companies ticked and highlighted; Done with a changed set opens the new set
+  (one company = its page, several = compared from Compare, or saved as a new combination and opened from a combined view).
+- **Page text and layout** (VJ's review of 2026-10-29): `page.titles` {statement, pl, combined: {statement, pl}} names the
+  two cards ("Synopsis P&L" / "Detailed P&L"; "Combined Synopsis" / "Combined Details" on a combination), the toolbar note
+  reads "Compare: A, B" / "Combine: A, B, C" with every company's display name, `page.split` [3, 9] = the statement's and
+  the P&L's share of the width when they sit side by side, a bucket's `columns` {column key: label} renames a column on
+  that group's header row ("Revenue" everywhere but Dental), `page.portfolio.label` = the list heading ("VJ's Dashboard").
+- **Periods** (`periods.options`): the period keys offered; `GET ...?period=custom&from=` uses the header From up to the as-of month, `lastYear` = the last full fiscal year ending at or before the as-of month.
+- `role: item` (any Offices config): a row with its own `accounts`, shown as booked, checked before every other rule
+  (internal charges, profit transfers, non-operating), and in no subtotal.
+
+**KPI dashboard** (`GET /api/kpi-dashboard`, `config/kpi-dashboard.json`, `app.config.json` `kpiDashboard`)
+- An Executive-style summary built from the office statements of one Offices instance (`kpiDashboard.source`:
+  `officesSheet` = the client's column-E rows, `offices` = the Offices tab rows), so every figure ties to the
+  Financial KPIs page: KPI tiles with sparklines and change vs last year, cost rows as % of collections, collections
+  by month against the same month last year, EBITDA by month with its margin, a sortable office leaderboard (CSV,
+  click opens the office), an office x month heatmap, a profit bridge from collections to EBITDA, the accounts that
+  moved EBITDA most vs last year, and a cost-structure matrix. Period = the header date range (unfinished current
+  month left out); comparison = the same months a year earlier. Every metric in the config is a statement row key or
+  `pct:<row key>` (% of collections), validated at startup. Served by `createOfficesRouter` (`dashboard` option);
+  pure functions in `server/offices/dashboard.js`.
 
 **Offices** (`GET /api/office-view`, `GET /api/office-view/:key`, `config/offices.json`, `server/offices/`)
 - Each dental practice and its sub-DSO are read as **one office** (income lands in the dental company, expenses in
@@ -338,7 +415,8 @@ production, collections, visits, new patients, combined with the P&L).
   dental equipment maintenance, Laboratory, Rent / occupancy, Marketing, Other expenses, Office EBITDA before
   management fees, DSO management fees, Office EBITDA, Operating cash flow), each expandable to the main QuickBooks
   accounts behind it, shown at the level the row's rule matched (504 Hygienist, 503.1 Dental Contract Labor;
-  deeper sub-accounts roll up into it; `statement.rollUpSubAccounts`: "matched" | true = main account | false). Payroll taxes,
+  deeper sub-accounts roll up into it; `statement.rollUpSubAccounts`: "matched" | true = main account | false;
+  `statement.sortAccounts`: "amount" = largest first (Offices tab) | "number" = account-number order (Financial KPIs tab)). Payroll taxes,
   benefits and bonuses are split across the rows in `payrollTaxes.allocateTo` in proportion. Depreciation /
   amortization / interest, other (non-operating) income and profit transfers (`profitTransfers`, the "fake"
   management fees) are memo lines, never in EBITDA. Balance sheet at the as-of month end and a year earlier (both

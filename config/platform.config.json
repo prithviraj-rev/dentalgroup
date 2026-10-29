@@ -86,7 +86,8 @@
   "adminRole": "org_admin",
   "defaultInviteRole": "member",
   "navigation": {
-    "$comment": "Sidebar items inside an organization, in order. Set enabled=false to hide a module everywhere. permission decides who sees it.",
+    "$comment": "Sidebar items inside an organization, in order. Set enabled=false to hide a module everywhere. permission decides who sees it. home = the module an organization opens on (sign-in, /o/<id>, a page the user may not see); reports since 2026-10-29 (VJ: land on the dashboard, not the overview). A user without that permission falls back to the first module they may see.",
+    "home": "reports",
     "org": [
       {
         "id": "overview",
@@ -336,7 +337,7 @@
       "enabled": true,
       "path": "/",
       "devUrl": "http://localhost:5173/",
-      "height": "calc(100vh - 140px)",
+      "height": "100vh",
       "placeholderTitle": "Reports are not connected for this organization yet",
       "placeholderBody": "Once its entities are connected to QuickBooks and synced, the P&L dashboard, office comparison and chart of accounts appear here."
     }

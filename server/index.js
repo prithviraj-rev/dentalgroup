@@ -193,10 +193,14 @@ if (appConfig.categoryView?.enabled !== false) app.use('/api', createCategoryVie
 // Group overview, Cash & balance sheet, Budget, Practice KPIs, live transactions (separate router and config files).
 app.use('/api', createFinanceRouter(db, { parseFilters }));
 // Offices tab: dental practice + sub-DSO as one office (separate router and config file).
-if (appConfig.offices?.enabled !== false) app.use('/api', createOfficesRouter(db, { parseFilters }));
+const kpiDashboardFor = (source) => {
+  const k = appConfig.kpiDashboard;
+  return k?.enabled !== false && k.source === source ? { path: k.apiPath, file: k.file, label: k.label } : null;
+};
+if (appConfig.offices?.enabled !== false) app.use('/api', createOfficesRouter(db, { parseFilters, dashboard: kpiDashboardFor('offices') }));
 // Second Offices tab built from the client's own KPI sheet (same code, other row rules; config/offices-sheet.json).
 if (appConfig.offices?.enabled !== false && appConfig.officesSheet?.enabled !== false) {
-  app.use('/api', createOfficesRouter(db, { parseFilters, file: path.resolve(ROOT, appConfig.officesSheet.file), base: appConfig.officesSheet.apiPath, analysis: false }));
+  app.use('/api', createOfficesRouter(db, { parseFilters, file: path.resolve(ROOT, appConfig.officesSheet.file), base: appConfig.officesSheet.apiPath, analysis: false, dashboard: kpiDashboardFor('officesSheet') }));
 }
 
 // ---------- Connections page ----------

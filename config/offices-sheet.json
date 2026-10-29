@@ -1,40 +1,432 @@
 {
-  "$comment": "Second Offices tab, 'Financial KPIs': the same page as the Offices tab, but every statement row holds exactly the QuickBooks account numbers the client wrote in column E of the Financial KPI sheet (docs/Sabuska DashBoard.xlsx). Everything not listed there (pairing, internal charges, flags, periods) is inherited from the file in extends. Account numbers are matched at the start of the account name or of any level of its full path, so 521 also catches 521 Dental Supplies:521.2 Other Dental Supplies. Accounts the sheet does not assign land in Other Expenses (expand the row to see them). Restart the server after editing.",
+  "$comment": "Second Offices tab, 'Financial KPIs': the same page as the Offices tab, but every statement row holds exactly the QuickBooks account numbers the client wrote in column E of the Financial KPI sheet (docs/Sabuska DashBoard.xlsx, revised 2026-10-26). Everything not listed there (pairing, internal charges, flags, periods) is inherited from the file in extends. Account numbers are matched at the start of the account name or of any level of its full path, so 521 also catches 521 Dental Supplies:521.2 Other Dental Supplies. Rows are matched in order (first match wins). Accounts the sheet does not assign are left out of the statement and totalled under the table. Restart the server after editing.",
   "extends": "config/offices.json",
+  "naming": {
+    "$comment": "Display names (VJ 2026-10-28): DBA names from the Main Sheet of docs/Company Org Structure Ownership, TIN EIN.xlsx, keyed by the first company's QuickBooks realm id; short = the part shown on the second header line of the Compare view; note = small text after the name (pairNote is the default for offices made of two companies). Y = dental real estate, U = construction / development / equipment, as on the sheet. Companies not listed keep their QuickBooks names.",
+    "pattern": "{company}",
+    "fallback": "{company}",
+    "pairNote": "dental + sub-DSO",
+    "companies": {
+      "123146197916154": {
+        "name": "Admire Dental Branford",
+        "short": "Branford"
+      },
+      "123146192174364": {
+        "name": "Admire Dental Bristol",
+        "short": "Bristol"
+      },
+      "193514800786499": {
+        "name": "Admire Dental Fall River",
+        "short": "Fall River"
+      },
+      "193514800786279": {
+        "name": "Admire Dental Lincoln",
+        "short": "Lincoln"
+      },
+      "193514636975439": {
+        "name": "Admire Dental Southgate",
+        "short": "Southgate"
+      },
+      "123146088383934": {
+        "name": "Admire Dental Springfield",
+        "short": "Springfield"
+      },
+      "9341457660339052": {
+        "name": "Admire Dental Bakersfield",
+        "short": "Bakersfield"
+      },
+      "123146320023274": {
+        "name": "Maple Tree Dental Easton",
+        "short": "Easton"
+      },
+      "9341455292331247": {
+        "name": "Luxia Dental Indianapolis",
+        "short": "Indianapolis"
+      },
+      "9341455292662689": {
+        "name": "Admire Dental Pueblo",
+        "short": "Pueblo",
+        "note": "sub-DSO only"
+      },
+      "9341455293820346": {
+        "name": "Admire Dental Fort Collins",
+        "short": "Fort Collins",
+        "note": "sub-DSO only"
+      },
+      "9341455292830051": {
+        "name": "Admire Dental Greeley",
+        "short": "Greeley",
+        "note": "sub-DSO only"
+      },
+      "9130351692019756": {
+        "name": "Sage Consulting Group & others",
+        "short": "& others"
+      },
+      "9341454048882418": {
+        "name": "Y sMain Properties",
+        "short": "Properties"
+      },
+      "9341454069322330": {
+        "name": "Y Branford Properties",
+        "short": "Properties"
+      },
+      "9130355738541596": {
+        "name": "U Gmak Builders",
+        "short": "Builders"
+      },
+      "9341455987444301": {
+        "name": "U ProDent Equipment",
+        "short": "Equipment"
+      }
+    }
+  },
+  "autoPair": {
+    "$comment": "Pairing (dental practice + sub-DSO by city) as in offices.json; otherCompanies offices = every other connected company (management, real estate, holding, construction) is listed as its own office so the buckets below cover all companies.",
+    "otherCompanies": "offices"
+  },
   "rows": {
     "list": [
-      { "key": "netCollections", "label": "Net Collections", "role": "collections", "accounts": "(^|:)40[12](\\s|$|:)", "$comment": "Sheet: 402 (401 refunds netted). Other income-type accounts (405 Uncategorized Income, Sales, ...) are not collections and go to the memo line 'Income not assigned to a row'." },
-      { "key": "providerComp", "label": "Provider Compensation", "role": "cost", "accounts": "(^|:)(503\\.1|504|506\\.3|576|506\\.2)(\\s|$|:)", "$comment": "Sheet: Dentist 503.1, Hygienists 504, Bonus 506.3, Payroll Taxes 576, 401K 506.2. Whole amounts, no proportional split. 500 Doctor's payroll and 501 Associate Dentist are NOT in the sheet and therefore fall into Other Expenses." },
-      { "key": "staffPayroll", "label": "Staff Payroll", "role": "cost", "accounts": "(^|:)503(\\s|$|:)", "$comment": "Sheet: 503.0 = the 503 accounts (503 Staff Payroll, 503 Contract Labor and its 503.2 / 503.3 sub-accounts; 503.1 is taken by Provider Compensation first). 502 Dental Assistant is not in the sheet." },
-      { "key": "trainingHiring", "label": "Provider Training & Hiring", "role": "cost", "accounts": "(^|:)(505|517)(\\s|$|:)", "$comment": "Sheet: Recruitment 505, Training & Education 517." },
-      { "key": "marketing", "label": "Marketing", "role": "cost", "accounts": "(^|:)507(\\s|$|:)", "$comment": "Sheet: 507." },
-      { "key": "dentalSupplies", "label": "Dental Supplies", "role": "cost", "accounts": "(^|:)521(\\s|$|:)", "$comment": "Sheet: 521. Dental equipment repairs (560.1) stay with 560 in Other Expenses, as column E puts Repairs 560 there." },
-      { "key": "laboratory", "label": "Laboratory", "role": "cost", "accounts": "(^|:)536(\\s|$|:)", "$comment": "Sheet: 536." },
-      { "key": "occupancy", "label": "Rent / Occupancy", "role": "cost", "accounts": "(^|:)559(\\s|$|:)", "$comment": "Sheet: 559 only. Utilities (586) and repairs (560) are not assigned to this row in column E." },
-      { "key": "smallEquipmentLease", "label": "Small Equipment Lease", "role": "cost", "accounts": "(^|:)540\\.1(\\s|$|:)", "$comment": "ASSUMPTION: the sheet lists this row with no account. 540.1 Small Dental Equipment (under 540 Equipment Lease Expense) is the only matching account in the books. Set accounts to a pattern that matches nothing to leave the row empty." },
-      { "key": "otherExpenses", "label": "Other Expenses", "role": "other", "accounts": "(^|:)(560|554\\.1|512|530|542|570)(\\s|$|:)", "$comment": "Sheet: Repairs 560, Office Exp 554.1, Fees 512, Insurance 530, Legal & Professional 542, Website & IT 570. Every other operating account (500, 501, 502, 506.1, 506.4, 516, 524, 540.2, 544, 545, 555, 584, 585, 586, ...) is not in the sheet and is left out of the statement; the total left out is shown under the table." },
-      { "key": "ebitdaBeforeFees", "label": "Office EBITDA before Management Fees", "role": "feesSubtotal" },
-      { "key": "managementFees", "label": "DSO Management Fees", "role": "fees", "accounts": "(^|:)650(\\s|$|:)", "$comment": "Sheet: 650." },
-      { "key": "officeEbitda", "label": "Office EBITDA", "role": "ebitda" },
-      { "key": "operatingCashFlow", "label": "Operating Cash Flow (incl. loan payments)", "role": "cashFlow" }
+      {
+        "key": "netCollections",
+        "label": "Net Collections",
+        "role": "collections",
+        "accounts": "(^|:)40[12](\\s|$|:)",
+        "$comment": "Sheet: 402 (401 refunds netted). Other income-type accounts (405 Uncategorized Income, Sales, ...) are not collections and go to the memo line 'Income not assigned to a row'."
+      },
+      {
+        "key": "providerComp",
+        "label": "Provider Compensation",
+        "role": "cost",
+        "accounts": "(^|:)(503\\.1|504|500|501)(\\s|$|:)",
+        "$comment": "Sheet: Dentist 503.1, Hygienists 504, 500 (Doctor's payroll), 501 (Associate Dentist), plus the share of Payroll Taxes 576 and Benefits 506 (payrollTaxes below: the sheet lists 576 and 506 under both payroll rows)."
+      },
+      {
+        "key": "staffPayroll",
+        "label": "Staff Payroll",
+        "role": "cost",
+        "accounts": "(^|:)(502|503)(\\s|$|:)",
+        "$comment": "Sheet: Dental Assistant 502, Staff Payroll 503 (503 Staff Payroll, 503 Contract Labor and its 503.2 / 503.3 sub-accounts; 503.1 is taken by Provider Compensation first), plus the share of 576 and 506."
+      },
+      {
+        "key": "trainingHiring",
+        "label": "Provider Training & Hiring",
+        "role": "cost",
+        "accounts": "(^|:)(505|517)(\\s|$|:)",
+        "$comment": "Sheet: Recruitment 505, Training & Education 517."
+      },
+      {
+        "key": "marketing",
+        "label": "Marketing",
+        "role": "cost",
+        "accounts": "(^|:)507(\\s|$|:)",
+        "$comment": "Sheet column E is empty: 507 Advertising & Marketing is the only matching account in the books."
+      },
+      {
+        "key": "dentalSupplies",
+        "label": "Dental Supplies",
+        "role": "cost",
+        "accounts": "(^|:)521(\\s|$|:)",
+        "$comment": "Sheet column E is empty: 521 Dental Supplies. Dental equipment repairs (560.1) stay with 560 in Other Expenses, as column E puts Repairs 560 there."
+      },
+      {
+        "key": "laboratory",
+        "label": "Laboratory",
+        "role": "cost",
+        "accounts": "(^|:)536(\\s|$|:)",
+        "$comment": "Sheet column E is empty: 536 Lab Fees."
+      },
+      {
+        "key": "occupancy",
+        "label": "Rent / Occupancy",
+        "role": "cost",
+        "accounts": "(^|:)559(\\s|$|:)",
+        "$comment": "Sheet: 559 Rent & NNN only. Repairs 560 and Utilities 586 are in Other Expenses, as column E says (client confirmed 2026-10-27: 560 is not rent)."
+      },
+      {
+        "key": "legalProfessional",
+        "label": "Legal & Professional",
+        "role": "cost",
+        "accounts": "(^|:)542(\\s|$|:)",
+        "$comment": "Sheet (new row): Legal & Professional 542."
+      },
+      {
+        "key": "otherExpenses",
+        "label": "Other Expenses",
+        "role": "other",
+        "accounts": "(^|:)(560|554|512|530|570|524|545|546|544|584|586)(\\s|$|:)",
+        "$comment": "Sheet: Repairs 560, Office Exp 554, Fees 512, Insurance 530, Website & IT 570, Dues & Subscription 524, Taxes & Licences 545, Medical Waste 546, Meals & Entertainment 544, Telephone & Internet 584, Utilities 586 (no CC expenses on dental offices). Every other operating account (516, 540 Equipment Lease, 555, 585, ...) is not in the sheet and is left out of the statement; the total left out is shown under the table."
+      },
+      {
+        "key": "ebitdaBeforeFees",
+        "label": "Office EBITDA before Management Fees",
+        "role": "feesSubtotal"
+      },
+      {
+        "key": "managementFees",
+        "label": "DSO Management Fees",
+        "role": "fees",
+        "accounts": "(^|:)650(\\s|$|:)",
+        "$comment": "Sheet: 650."
+      },
+      {
+        "key": "officeEbitda",
+        "label": "Office EBITDA",
+        "role": "ebitda"
+      },
+      {
+        "key": "partnerWithdrawal",
+        "label": "Partner's Withdrawal",
+        "role": "item",
+        "accounts": "(^|:)802\\.[12](\\s|$|:)",
+        "$comment": "Sheet: 802.1, 802.2. Shown as booked below EBITDA, not a cost of the office (other 802 accounts stay profit transfers, left out)."
+      },
+      {
+        "key": "operatingCashFlow",
+        "label": "Operating Cash Flow (incl. loan payments)",
+        "role": "cashFlow"
+      },
+      {
+        "key": "nonOperatingIncome",
+        "label": "Non Operational Income",
+        "role": "item",
+        "accounts": "(^|:)801(\\s|$|:)",
+        "$comment": "Sheet: 801. Shown as booked, outside EBITDA and cash flow."
+      },
+      {
+        "key": "nonOperatingExpenses",
+        "label": "Non Operational Expenses",
+        "role": "item",
+        "accounts": "(^|:)701(\\s|$|:)",
+        "$comment": "Sheet: 701. Shown as booked, outside EBITDA and cash flow."
+      }
     ]
   },
   "statement": {
-    "$comment": "Show the accounts behind each row at the level the sheet's number matched: 503.1, 504, 506.3, 576, 506.2 under Provider Compensation, 402 under Net Collections.",
-    "rollUpSubAccounts": "matched"
+    "$comment": "Show the accounts behind each row at the level the sheet's number matched: 503.1, 504, 500, 501 under Provider Compensation, 402 under Net Collections. sortAccounts: number = in account-number order (512 Fees first under Other Expenses); amount = largest first (the Offices tab).",
+    "rollUpSubAccounts": "matched",
+    "sortAccounts": "number"
   },
   "page": {
     "$comment": "Sections of the office page. The statement, plus the combined profit and loss exactly as QuickBooks books it (for checking against the QuickBooks report); KPI tiles, balance sheet and trends are left out here. Options: tiles | statement | pl | balanceSheet | trends. memo false: no 'Not in the rows above' lines (depreciation, profit transfers, internal charges, accounts not in the sheet); only their total is noted under the table.",
-    "sections": ["statement", "pl"],
-    "memo": false
+    "titles": {
+      "$comment": "VJ 2026-10-28: the statement card is the 'Synopsis P&L', the account-level card the 'Detailed P&L' (one company and Compare); combined = the two titles on a combined view (VJ 2026-10-29).",
+      "statement": "Synopsis P&L",
+      "pl": "Detailed P&L",
+      "combined": {
+        "statement": "Combined Synopsis",
+        "pl": "Combined Details"
+      }
+    },
+    "split": [
+      5,
+      7
+    ],
+    "sections": [
+      "statement",
+      "pl"
+    ],
+    "memo": false,
+    "portfolio": {
+      "$comment": "The portfolio (all companies) page. summary false: no Portfolio heading, Combine companies button or totals tiles. flags false: no 'Needs attention' chips and no flag pills. tags false: no 'N companies' / 'Books to' tags under the names. combinedList false: no 'Combined offices' section (saved combinations still open from the Offices tab). label: heading and first column header. columns: the figures shown, in order; key = a statement row key or totalExpenses (cost + other rows + management fees, VJ: \"including pass thru management fees\") | operatingCosts (cost + other rows only) | loanPayments (net loan principal repaid) | withdrawals (Partner's Withdrawal row + loanPayments) | cash | ar | ap | ebitdaMargin | vsPrior. buckets: the companies in fixed groups with a subtotal each; a bucket takes an office when one of its companies is listed in companies, else when the first company's Company type (Ledgerview entity group, autoPair.dimension) is in categories; rest = the bucket for everything else. Combine and Compare work within one bucket.",
+      "summary": false,
+      "flags": false,
+      "label": "VJ's Dashboard",
+      "nameColumn": "Company",
+      "tags": false,
+      "combinedList": false,
+      "columns": [
+        {
+          "key": "netCollections",
+          "label": "Collections"
+        },
+        {
+          "key": "totalExpenses",
+          "label": "Total expenses"
+        },
+        {
+          "key": "managementFees",
+          "label": "Management fees"
+        },
+        {
+          "key": "officeEbitda",
+          "label": "EBITDA"
+        },
+        {
+          "key": "withdrawals",
+          "label": "Withdrawals & profits"
+        },
+        {
+          "key": "operatingCashFlow",
+          "label": "Cash flow"
+        }
+      ],
+      "buckets": {
+        "$comment": "Groups of the client's 'Company Org Structure Ownership, TIN EIN.xlsx' Main Sheet (2026-10-28), in its order. Ledgerview Company type groups give the default (categories); companies lists the QuickBooks realm ids the sheet places elsewhere: the five non-dental real-estate LLCs sit in the 'Dental RE (Y)' Ledgerview group, Canton (Udai PLLC, sold 2026-06-09), Advanced Cosmetic Dentistry (MiddleTown Smiles, sold 2023) and Penta Dental (staffing) are 'NON Operational Companies' on the sheet, South Main Dental (icare Dental LLC) is under 'Construction & Development or Equipment'. Move a company by editing these lists or its Ledgerview group. columns: other column names on the group's header row (VJ 2026-10-29: only dental practices have Collections, every other group says Revenue).",
+        "list": [
+          {
+            "key": "sabuska",
+            "label": "Sabuska",
+            "companies": [
+              "9130346917810876"
+            ],
+            "columns": {
+              "netCollections": "Revenue"
+            },
+            "$comment": "Listed again 2026-10-28 evening (VJ): the holding company sits first in the list as its own group; show: false would hide it."
+          },
+          {
+            "key": "dental",
+            "label": "Dental",
+            "categories": [
+              "Dental Companies",
+              "Dental Management (z & zz)"
+            ]
+          },
+          {
+            "key": "dentalRe",
+            "label": "Dental real estate",
+            "categories": [
+              "Dental RE (Y)"
+            ],
+            "columns": {
+              "netCollections": "Revenue"
+            }
+          },
+          {
+            "key": "nonDentalRe",
+            "label": "Non-dental real estate",
+            "categories": [
+              "Non-dental RE"
+            ],
+            "companies": [
+              "9341454071838317",
+              "9341454072575567",
+              "9341454072264302",
+              "9341454071663480",
+              "9341454289170612"
+            ],
+            "columns": {
+              "netCollections": "Revenue"
+            }
+          },
+          {
+            "key": "other",
+            "label": "Construction, development & equipment",
+            "categories": [
+              "Other companies"
+            ],
+            "companies": [
+              "123146197916339",
+              "9130351692019756"
+            ],
+            "columns": {
+              "netCollections": "Revenue"
+            },
+            "$comment": "VJ 2026-10-28: Sage Consulting Group (a management company by Ledgerview group) is listed here, not under Dental."
+          },
+          {
+            "key": "nonOperational",
+            "label": "Non-operational",
+            "companies": [
+              "9130356357978486",
+              "123146487355829",
+              "9130348094540566"
+            ],
+            "columns": {
+              "netCollections": "Revenue"
+            }
+          }
+        ],
+        "rest": "other"
+      }
+    }
   },
   "payrollTaxes": {
-    "$comment": "Sheet column E puts payroll taxes (576), bonus (506.3) and 401K (506.2) wholly into Provider Compensation, so nothing is split here.",
-    "accounts": "",
-    "allocateTo": []
+    "$comment": "Sheet column E lists Payroll Taxes 576 and Benefits 506 under BOTH Provider Compensation and Staff Payroll without a ratio, so they are split across the two rows in proportion to each month's wages (same rule as the Offices tab).",
+    "accounts": "(^|:)(576|506)(\\s|$|:)",
+    "allocateTo": [
+      "providerComp",
+      "staffPayroll"
+    ]
   },
   "cashFlow": {
-    "$comment": "Sheet C18: operating cash flow 'should also take into consideration the loan repayments'. true adds loan principal movements (borrowings and repayments on long-term liabilities and debt accounts) to the operating cash flow row.",
+    "$comment": "Sheet: operating cash flow 'should also take into consideration the loan repayments'. true adds loan principal movements (borrowings and repayments on long-term liabilities and debt accounts) to the operating cash flow row.",
     "includeLoanPayments": true
+  },
+  "periods": {
+    "$comment": "Period buttons offered (default month): month | quarter (last full quarter) | ytd | lastYear (last full year) | years (one button per calendar year, the last yearButtons years: VJ 2026-10-28 wanted 2026 / 2025 / 2024 instead of Last year, dropped again on 2026-10-29: Last month | Last quarter | YTD | Custom) | custom (the header From / To).",
+    "default": "month",
+    "options": [
+      "month",
+      "quarter",
+      "ytd",
+      "custom"
+    ],
+    "yearButtons": 3
+  },
+  "picker": {
+    "$comment": "Header company picker (VJ 2026-10-28): groups by company, so dental practices and their management companies are separate headings (the list below keeps practice + sub-DSO as one row). Same rules as page.portfolio.buckets: companies (realm ids) first, then the Company type category, else rest.",
+    "groups": [
+      {
+        "key": "sabuska",
+        "label": "Sabuska",
+        "companies": [
+          "9130346917810876"
+        ]
+      },
+      {
+        "key": "dental",
+        "label": "Dental companies",
+        "categories": [
+          "Dental Companies"
+        ]
+      },
+      {
+        "key": "management",
+        "label": "Dental Management",
+        "categories": [
+          "Dental Management (z & zz)"
+        ]
+      },
+      {
+        "key": "dentalRe",
+        "label": "Dental real estate",
+        "categories": [
+          "Dental RE (Y)"
+        ]
+      },
+      {
+        "key": "nonDentalRe",
+        "label": "Non-dental real estate",
+        "companies": [
+          "9341454071838317",
+          "9341454072575567",
+          "9341454072264302",
+          "9341454071663480",
+          "9341454289170612"
+        ]
+      },
+      {
+        "key": "other",
+        "label": "Construction, development & equipment",
+        "categories": [
+          "Other companies"
+        ],
+        "companies": [
+          "123146197916339",
+          "9130351692019756"
+        ]
+      },
+      {
+        "key": "nonOperational",
+        "label": "Non-operational",
+        "companies": [
+          "9130356357978486",
+          "123146487355829",
+          "9130348094540566"
+        ]
+      }
+    ],
+    "rest": "other"
   }
 }

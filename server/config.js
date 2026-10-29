@@ -14,6 +14,7 @@ const env = process.env;
 const APP_CONFIG_DEFAULTS = {
   dashboard: {
     title: 'P&L dashboard',
+    showHeader: true,
     locale: 'en-US',
     currency: 'USD',
     defaultGranularity: 'month',
@@ -23,6 +24,16 @@ const APP_CONFIG_DEFAULTS = {
     granularities: ['month', 'quarter', 'year'],
     chartHeights: { main: 320, office: 280 },
     syncToastSeconds: { success: 8, error: 12 },
+    defaultTab: 'dashboard',
+    tabs: null,
+    officePicker: 'select',
+    periodPicker: 'range',
+    periods: ['month', 'quarter', 'ytd', 'lastYear', 'custom'],
+    defaultPeriod: 'month',
+    yearButtons: 3,
+    syncButton: 'always',
+    syncStaleHours: 24,
+    basis: { show: false, options: ['accrual', 'cash'], available: ['accrual'], default: 'accrual' },
   },
   compare: { maxOffices: null, minOffices: 2, defaultMetric: 'netIncome', metrics: ['income', 'expenses', 'netIncome'] },
   analysis: {
@@ -41,6 +52,7 @@ const APP_CONFIG_DEFAULTS = {
   practiceKpis: { enabled: true, file: 'config/practice-kpis.json' },
   offices: { enabled: true, file: 'config/offices.json' },
   officesSheet: { enabled: true, file: 'config/offices-sheet.json', apiPath: 'office-sheet', label: 'Financial KPIs' },
+  kpiDashboard: { enabled: true, file: 'config/kpi-dashboard.json', apiPath: 'kpi-dashboard', label: 'KPI dashboard', source: 'officesSheet' },
   rawSync: { file: 'config/raw-sync.json' },
   officeChart: { enabled: true, maxOffices: 8, metric: 'netIncome' },
   charts: {
@@ -70,7 +82,7 @@ const APP_CONFIG_DEFAULTS = {
     colors: { Income: 1, COGS: 2, Expenses: 5, OtherIncome: 6, OtherExpenses: 7 }, // palette slots
   },
   sync: {
-    startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', sequential: true, includeChartOfAccounts: true,
+    startDate: '2025-01-01', endDate: '2026-12-31', accountingMethod: 'Accrual', cashBasis: false, sequential: true, includeChartOfAccounts: true,
     schedule: { enabled: true, time: '03:00', timezone: 'America/Chicago', catchUpOnStart: true, maxAgeHours: 26 },
   },
   qbo: { minorVersion: 75, refreshSkewMinutes: 5, oauthStateTtlMinutes: 10 },
@@ -117,12 +129,38 @@ export function loadAppConfig(file = appConfigPath) {
   const os = cfg.officesSheet;
   if (!/^[a-z][a-z0-9-]*$/.test(String(os.apiPath)) || os.apiPath === 'office-view' || os.apiPath === 'analysis') throw new Error('app.config.json: officesSheet.apiPath must be a lower-case URL segment other than office-view');
   if (typeof os.label !== 'string' || !os.label.trim()) throw new Error('app.config.json: officesSheet.label is required');
+  const kd = cfg.kpiDashboard;
+  if (!/^[a-z][a-z0-9-]*$/.test(String(kd.apiPath)) || ['office-view', 'analysis', os.apiPath].includes(kd.apiPath)) throw new Error('app.config.json: kpiDashboard.apiPath must be a lower-case URL segment other than office-view, analysis and officesSheet.apiPath');
+  if (!['offices', 'officesSheet'].includes(kd.source)) throw new Error('app.config.json: kpiDashboard.source must be offices | officesSheet (which Offices config supplies the statement rows)');
+  if (typeof kd.label !== 'string' || !kd.label.trim()) throw new Error('app.config.json: kpiDashboard.label is required');
   if (!Number.isInteger(a.topN) || a.topN < 1 || a.topN > 8) throw new Error('app.config.json: analysis.topN must be 1..8');
   if (!a.chart.options.length || a.chart.options.some((t) => !['lines', 'bars', 'stacked', 'small', 'ranked'].includes(t)) || !a.chart.options.includes(a.chart.default)) throw new Error('app.config.json: analysis.chart options must come from lines | bars | stacked | small | ranked and include the default');
   for (const m of [...c.metrics, c.defaultMetric, cfg.officeChart.metric, ...(cfg.dashboard.secondaryKpis || [])]) {
     if (!cfg.metrics[m]) throw new Error(`app.config.json: unknown metric "${m}"`);
   }
   if (!cfg.dashboard.granularities.includes(cfg.dashboard.defaultGranularity)) throw new Error('app.config.json: dashboard.defaultGranularity is not in dashboard.granularities');
+  if (!['select', 'companies'].includes(cfg.dashboard.officePicker)) throw new Error('app.config.json: dashboard.officePicker must be select (Office dropdown: all | category | one office | compare) or companies (no dropdown: company chips in their groups, none picked = all)');
+  if (typeof cfg.dashboard.showHeader !== 'boolean') throw new Error('app.config.json: dashboard.showHeader must be true or false');
+  if (!['range', 'buttons'].includes(cfg.dashboard.periodPicker)) throw new Error('app.config.json: dashboard.periodPicker must be range (From / To / Granularity controls) or buttons (Month | Last quarter | YTD | Last year | Custom; Custom shows From / To)');
+  const PERIOD_IDS = ['month', 'quarter', 'ytd', 'lastYear', 'ttm', 'custom', 'years'];
+  const ps = cfg.dashboard.periods;
+  if (!Array.isArray(ps) || !ps.length || ps.some((p) => !PERIOD_IDS.includes(p))) throw new Error(`app.config.json: dashboard.periods must be a non-empty list from ${PERIOD_IDS.join(' | ')} (years = one button per calendar year, dashboard.yearButtons of them)`);
+  if (!Number.isInteger(cfg.dashboard.yearButtons) || cfg.dashboard.yearButtons < 1 || cfg.dashboard.yearButtons > 8) throw new Error('app.config.json: dashboard.yearButtons must be 1..8');
+  if (!ps.includes(cfg.dashboard.defaultPeriod)) throw new Error('app.config.json: dashboard.defaultPeriod must be one of dashboard.periods');
+  const bs = cfg.dashboard.basis;
+  const BASES = ['accrual', 'cash'];
+  if (typeof bs !== 'object' || bs === null || typeof bs.show !== 'boolean') throw new Error('app.config.json: dashboard.basis must be { show, options, available, default }');
+  if (!Array.isArray(bs.options) || !bs.options.length || bs.options.some((b) => !BASES.includes(b))) throw new Error('app.config.json: dashboard.basis.options must be a non-empty list from accrual | cash');
+  if (!Array.isArray(bs.available) || !bs.available.length || bs.available.some((b) => !bs.options.includes(b))) throw new Error('app.config.json: dashboard.basis.available must list bases from dashboard.basis.options');
+  if (!bs.available.includes(bs.default)) throw new Error('app.config.json: dashboard.basis.default must be one of dashboard.basis.available');
+  if (cfg.officesSheet && cfg.officesSheet.controls !== undefined && !['header', 'inline'].includes(cfg.officesSheet.controls)) throw new Error('app.config.json: officesSheet.controls must be header (filters in the page header) or inline (filters in the list button bar)');
+  if (!['always', 'stale', 'never'].includes(cfg.dashboard.syncButton)) throw new Error('app.config.json: dashboard.syncButton must be always | stale (only when the last sync is older than syncStaleHours) | never');
+  if (!Number.isFinite(cfg.dashboard.syncStaleHours) || cfg.dashboard.syncStaleHours <= 0) throw new Error('app.config.json: dashboard.syncStaleHours must be a positive number of hours');
+  const TAB_IDS = ['executive', 'dashboard', 'analysis', 'categories', 'offices', 'officesSheet', 'kpi', 'group', 'cash', 'coa'];
+  const tabs = cfg.dashboard.tabs;
+  if (tabs !== null && (!Array.isArray(tabs) || !tabs.length || tabs.some((t) => !TAB_IDS.includes(t)))) throw new Error(`app.config.json: dashboard.tabs must be null (every tab) or a non-empty list from ${TAB_IDS.join(' | ')}`);
+  if (!TAB_IDS.includes(cfg.dashboard.defaultTab)) throw new Error(`app.config.json: dashboard.defaultTab must be one of ${TAB_IDS.join(' | ')}`);
+  if (tabs && !tabs.includes(cfg.dashboard.defaultTab)) throw new Error('app.config.json: dashboard.defaultTab must be one of dashboard.tabs');
   const CHART_TYPES = {
     'charts.main': [cfg.charts.main, ['combo', 'lines', 'bars', 'stacked']],
     'charts.office': [cfg.charts.office, ['lines', 'bars', 'stacked', 'small', 'ranked']],
@@ -143,6 +181,8 @@ export function loadAppConfig(file = appConfigPath) {
     if (!cfg.groups.order.includes(g)) throw new Error(`app.config.json: group "${g}" is not in groups.order`);
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.sync.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(cfg.sync.endDate)) throw new Error('app.config.json: sync.startDate/endDate must be YYYY-MM-DD');
+  if (typeof cfg.sync.cashBasis !== 'boolean') throw new Error('app.config.json: sync.cashBasis must be true (also pull the P&L report on a cash basis into pl_lines_cash) or false');
+  if (cfg.dashboard.basis.available.includes('cash') && !cfg.sync.cashBasis) throw new Error('app.config.json: dashboard.basis.available lists cash but sync.cashBasis is false (nothing would fill it)');
   return cfg;
 }
 

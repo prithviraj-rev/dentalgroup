@@ -56,11 +56,20 @@ const ALL = [
   ['cash & balance sheet, single office', `?tab=cash&office=${ids[0]}`],
   ['financial kpis, portfolio', '?tab=officesSheet'],
   ['financial kpis, single company opens its office', `?tab=officesSheet&office=${ids[0]}`],
+  ['kpi dashboard, all offices', '?tab=kpi'],
+  ['kpi dashboard, single office', `?tab=kpi&office=${ids[0]}`],
+  ['kpi dashboard, compare 3', `?tab=kpi&office=${ids.slice(0, 3).join(',')}`],
+  ['kpi dashboard, one year', '?tab=kpi&from=2026-01&to=2026-10'],
   ['chart of accounts, all offices', '?tab=coa'],
   ['chart of accounts, single office', `?tab=coa&office=${ids[1]}`],
   ['chart of accounts, compare 5', `?tab=coa&office=${ids.slice(0, 5).join(',')}`],
 ];
-const SCENARIOS = process.env.ONLY ? ALL.filter(([n]) => n.startsWith(process.env.ONLY)) : ALL;
+// app.config.json dashboard.tabs: scenarios for tabs that are not shown would silently render the default tab, so skip them.
+const shownTabs = (await (await fetch(`${BASE}/api/config`, { headers: { cookie } })).json()).dashboard?.tabs;
+const tabOf = (q) => /[?&]tab=([a-zA-Z]+)/.exec(q)?.[1];
+const SHOWN = Array.isArray(shownTabs) ? ALL.filter(([, q]) => !tabOf(q) || shownTabs.includes(tabOf(q))) : ALL;
+if (SHOWN.length !== ALL.length) console.log(`Skipping ${ALL.length - SHOWN.length} scenario(s) for tabs hidden by dashboard.tabs (${shownTabs.join(', ')})`);
+const SCENARIOS = process.env.ONLY ? SHOWN.filter(([n]) => n.startsWith(process.env.ONLY)) : SHOWN;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;

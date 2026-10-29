@@ -45,7 +45,7 @@ function Root() {
             <Route path="/" element={<Home />} />
             <Route path="/admin" element={me?.user.isPlatformAdmin ? <Organizations /> : <Navigate to="/" replace />} />
             <Route path="/o/:orgId" element={<OrgScope />}>
-              <Route index element={<Navigate to="overview" replace />} />
+              <Route index element={<HomeRedirect />} />
               <Route path="overview" element={<Guard module="overview"><Overview /></Guard>} />
               <Route path="reports" element={<Guard module="reports"><Reports /></Guard>} />
               <Route path="entities" element={<Guard module="entities"><Entities /></Guard>} />
@@ -69,9 +69,9 @@ function RequireAuth() {
 }
 
 function Home() {
-  const { me } = useApp();
+  const { cfg, me } = useApp();
   if (me.user.isPlatformAdmin) return <Navigate to="/admin" replace />;
-  if (me.orgs[0]) return <Navigate to={`/o/${me.orgs[0].id}/overview`} replace />;
+  if (me.orgs[0]) return <Navigate to={`/o/${me.orgs[0].id}/${homeModule(cfg, me.orgs[0])}`} replace />;
   return <div className="p-6 text-sm text-ink2">Your account is not part of any active organization yet.</div>;
 }
 
@@ -90,8 +90,22 @@ function Guard({ module, children }) {
   const { orgId } = useParams();
   const org = me.orgs.find((o) => String(o.id) === orgId);
   const item = cfg.navigation.org.find((n) => n.id === module);
-  if (!item || item.enabled === false || (item.permission && !can(org, item.permission))) return <Navigate to={`/o/${orgId}/overview`} replace />;
+  if (!item || item.enabled === false || (item.permission && !can(org, item.permission))) return <Navigate to={`/o/${orgId}/${homeModule(cfg, org)}`} replace />;
   return children;
+}
+
+/** The module an organization opens on: config navigation.home (reports), or the first enabled module the user may see. */
+function homeModule(cfg, org) {
+  const items = cfg.navigation.org.filter((n) => n.enabled !== false && (!n.permission || can(org, n.permission)));
+  const home = items.find((n) => n.id === cfg.navigation.home);
+  return (home || items[0] || { id: 'overview' }).id;
+}
+
+function HomeRedirect() {
+  const { cfg, me } = useApp();
+  const { orgId } = useParams();
+  const org = me.orgs.find((o) => String(o.id) === orgId);
+  return <Navigate to={homeModule(cfg, org)} replace />;
 }
 
 export default function App() {

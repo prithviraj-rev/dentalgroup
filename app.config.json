@@ -34,12 +34,13 @@
       "grossMargin",
       "netMargin"
     ],
-    "$comment": "officePicker: select = the Office dropdown (all offices | a category | one office | Compare offices...); companies = no dropdown, the company chips are always shown in the groups of the Financial KPIs tab (officesSheet page.portfolio.buckets, colored by group); nothing picked = every company, otherwise only the picked ones. showHeader false hides the title and the 'N offices connected · last sync · data range' line above the tabs (title still names the browser tab). secondaryKpis: metric keys shown in the second KPI row on the Dashboard tab (any key from \"metrics\"; [] hides the row). defaultTab: tab shown when the dashboard opens (executive | dashboard | analysis | categories | offices | officesSheet | kpi | group | cash | coa). tabs: the tabs shown in the dashboard, in this fixed order, from the same ids (null = every enabled tab); the other tabs' APIs stay served. defaultRange.snapMonths: on open, show this many months ending at the latest synced month (null = all synced history). periodPicker buttons (VJ 2026-10-28): the header shows period buttons (dashboard.periods: month (labelled Last month) | quarter = last full quarter | ytd | lastYear | years (one button per calendar year, yearButtons of them; VJ dropped them on 2026-10-29) | custom; defaultPeriod) instead of From / To / Granularity; Custom shows From / To. Every tab reads the chosen window; the Financial KPIs tab also labels it. syncButton stale = Sync now only when the last sync is older than syncStaleHours (always | never).",
+    "$comment": "officePicker: select = the Office dropdown (all offices | a category | one office | Compare offices...); companies = no dropdown, the company chips are always shown in the groups of the Financial KPIs tab (officesSheet page.portfolio.buckets, colored by group); nothing picked = every company, otherwise only the picked ones. showHeader false hides the title and the 'N offices connected · last sync · data range' line above the tabs (title still names the browser tab). secondaryKpis: metric keys shown in the second KPI row on the Dashboard tab (any key from \"metrics\"; [] hides the row). defaultTab: tab shown when the dashboard opens (executive | dashboard | analysis | categories | offices | officesSheet | kpi | charts | group | cash | coa). tabs: the tabs shown in the dashboard, in this fixed order, from the same ids (null = every enabled tab); the other tabs' APIs stay served. defaultRange.snapMonths: on open, show this many months ending at the latest synced month (null = all synced history). periodPicker buttons (VJ 2026-10-28): the header shows period buttons (dashboard.periods: month (labelled Last month) | quarter = last full quarter | ytd | lastYear | years (one button per calendar year, yearButtons of them; VJ dropped them on 2026-10-29) | custom; defaultPeriod) instead of From / To / Granularity; Custom shows From / To. Every tab reads the chosen window; the Financial KPIs tab also labels it. syncButton stale = Sync now only when the last sync is older than syncStaleHours (always | never).",
     "defaultTab": "officesSheet",
     "tabs": [
       "executive",
       "officesSheet",
-      "kpi"
+      "kpi",
+      "charts"
     ],
     "periodPicker": "buttons",
     "periods": [
@@ -416,6 +417,18 @@
     "apiPath": "kpi-dashboard",
     "label": "KPI dashboard",
     "source": "officesSheet"
+  },
+  "compareCharts": {
+    "$comment": "Compare charts tab (VJ 2026-10-30: the comparison tables are hard to read, \"do charts or graphs\"): the same companies x periods picks as the Side by side card, drawn as a trend line chart (one line per company and period, month by month) and one small bar panel per statement row. source: officesSheet = rows and /set endpoint of the Financial KPIs sheet | offices = config/offices.json. defaultMetric: the row the trend opens on (null = the collections row). panels: the rows drawn as panels (null = every row). maxSets: how many companies / groups can be compared at once (1..8, one colour each). periodYears / periodMonths: how far back the period picker offers years and months. rememberPicks: the browser keeps the last picks (localStorage).",
+    "enabled": true,
+    "label": "Compare charts",
+    "source": "officesSheet",
+    "defaultMetric": "netCollections",
+    "panels": null,
+    "maxSets": 8,
+    "periodYears": 6,
+    "periodMonths": 24,
+    "rememberPicks": true
   },
   "practiceKpis": {
     "$comment": "Practice KPIs tab: production, collections, visits, new patients ... imported from the practice-management system (CSV upload or POST /api/practice-kpis) and combined with the P&L. Metrics and column matching in the file below.",

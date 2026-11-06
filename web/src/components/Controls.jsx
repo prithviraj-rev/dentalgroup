@@ -168,7 +168,7 @@ export default function Controls({ config, offices, filters, onChange, yoy, onYo
   );
   const syncButton = showSync && (
     <button type="button" onClick={onSync} disabled={syncing} title={`Last sync ${ago(lastSync)}`}
-      className={`h-8 rounded-lg px-3 text-sm font-medium disabled:opacity-60 ${stale ? 'bg-accent text-white' : 'control'}`}>
+      className={`h-8 rounded-lg px-3 text-sm font-medium disabled:opacity-60 ${stale ? 'bg-pressed text-pressedInk' : 'control'}`}>
       {syncing ? 'Syncing…' : 'Sync now'}
     </button>
   );
@@ -198,7 +198,7 @@ export default function Controls({ config, offices, filters, onChange, yoy, onYo
         )}
         {show('companies') && chips && !view && selected.length > 0 && <button type="button" className="text-xs text-accent hover:underline" onClick={() => setSelection([])}>Unselect all</button>}
         {show('basis') && basisSeg}
-        {show('sync') && showSync && <button type="button" onClick={onSync} disabled={syncing} title={`Last sync ${ago(lastSync)}`} className={`h-8 rounded-lg px-3 text-xs font-medium disabled:opacity-60 ${stale ? 'bg-accent text-white' : 'control'}`}>{syncing ? 'Syncing…' : 'Sync now'}</button>}
+        {show('sync') && showSync && <button type="button" onClick={onSync} disabled={syncing} title={`Last sync ${ago(lastSync)}`} className={`h-8 rounded-lg px-3 text-xs font-medium disabled:opacity-60 ${stale ? 'bg-pressed text-pressedInk' : 'control'}`}>{syncing ? 'Syncing…' : 'Sync now'}</button>}
         {chips && popup}
       </>
     );

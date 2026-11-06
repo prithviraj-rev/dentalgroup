@@ -72,7 +72,7 @@ function Segments({ data, basis }) {
       subtitle={`${cons ? 'Each segment as booked; the eliminations row removes intercompany charges to reach the consolidated group.' : 'Each segment exactly as booked in QuickBooks.'}${data.totals.overlapMonths && data.totals.overlapMonths < data.totals.months ? ` YoY uses the ${data.totals.overlapMonths} months that have data in both years.` : ''}`}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="text-xs text-ink2">
+          <thead className="text-xs text-theadInk">
             <tr className="border-b border-[var(--line)]">
               <th className="px-2 py-2 text-left font-medium">Segment</th>
               <th className="px-2 text-right font-medium">Companies</th>
@@ -255,7 +255,7 @@ function Scorecard({ data, onOpenOffice }) {
       right={<button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button>}>
       <div className="max-h-[560px] overflow-auto">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="sticky top-0 z-10 bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+          <thead className="sticky top-0 z-10 bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
             <tr>
               {sortTh(sort, setSort, 'name', 'Office', 'text-left')}
               {sortTh(sort, setSort, 'segment', data.segmentLabel || 'Segment', 'text-left')}
@@ -288,7 +288,7 @@ function Eliminations({ data }) {
     <Section title="Intercompany reconciliation" subtitle="Only the amount found on both sides is eliminated (month by month), so consolidated net income is unchanged. Unmatched means one side is larger: a charge booked on one side only, payments to outside parties caught by the rule (e.g. rent to outside landlords), or a rule in config/group-overview.json that needs narrowing.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[620px] text-sm">
-          <thead className="text-xs text-ink2">
+          <thead className="text-xs text-theadInk">
             <tr className="border-b border-[var(--line)]">
               <th className="px-2 py-2 text-left font-medium">Rule</th>
               <th className="px-2 text-right font-medium">Income side</th>

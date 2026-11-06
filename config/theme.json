@@ -1,0 +1,16 @@
+{
+  "$comment": "Theme configurator for BOTH apps (the P&L dashboard tab row and tables, the Ledgerview sidebar / top bar / login band). Every key under colors is a CSS variable of web/src/index.css and platform/src/index.css: banner + banner2 = the gradient of the tab row and the sidebar, bannerInk = text on it, bannerMark = the open tab's underline and the active sidebar item's bar, accent = pressed buttons / links / titles, accentBright = highlights on dark surfaces, page / surface / ink / ink2 / muted / line / axis / good / bad = the page and card colours. Any CSS colour (#rrggbb, rgb(), hsl(), a name). A key left out keeps the stylesheet default; dark = the same keys for a dark-mode browser (only what differs). brand.logoUrl = an image for the logo tile of the sidebar and the dashboard banner (null = the brand.logoText letters, 1-4 characters; null = Ledgerview's platform.logoText). Restart the server after editing; a wrong key or colour stops the server with its name. The Ledgerview Theme page (platform admins, /app/admin/theme) overrides this file per token and keeps its picks in the database.",
+  "brand": { "logoUrl": null, "logoText": null },
+  "colors": {
+    "banner": "#1d4ed8",
+    "banner2": "#2f6fe4",
+    "bannerInk": "#ffffff",
+    "bannerMark": "#ffffff",
+    "accent": "#1f4e8c",
+    "accentBright": "#5aa9ff"
+  },
+  "dark": {
+    "banner": "#173fb0",
+    "banner2": "#2459c4"
+  }
+}

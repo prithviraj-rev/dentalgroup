@@ -207,11 +207,12 @@
     "sortAccounts": "number"
   },
   "page": {
-    "$comment": "Sections of the office page. The statement, plus the combined profit and loss exactly as QuickBooks books it (for checking against the QuickBooks report); KPI tiles, balance sheet and trends are left out here. Options: tiles | statement | pl | balanceSheet | trends. memo false: no 'Not in the rows above' lines (depreciation, profit transfers, internal charges, accounts not in the sheet); only their total is noted under the table.",
+    "$comment": "Sections of the office page. The statement, plus the combined profit and loss exactly as QuickBooks books it (for checking against the QuickBooks report); KPI tiles, balance sheet and trends are left out here. Options: tiles | statement | pl | balanceSheet | trends | sideBySide (the Side by side card at the end of Compare: columns of any companies over any year / month / dates, VJ 2026-10-29). memo false: no 'Not in the rows above' lines (depreciation, profit transfers, internal charges, accounts not in the sheet); only their total is noted under the table.",
     "titles": {
       "$comment": "VJ 2026-10-28: the statement card is the 'Synopsis P&L', the account-level card the 'Detailed P&L' (one company and Compare); combined = the two titles on a combined view (VJ 2026-10-29).",
       "statement": "Synopsis P&L",
       "pl": "Detailed P&L",
+      "sideBySide": "Synopsis comparison",
       "combined": {
         "statement": "Combined Synopsis",
         "pl": "Combined Details"
@@ -223,7 +224,8 @@
     ],
     "sections": [
       "statement",
-      "pl"
+      "pl",
+      "sideBySide"
     ],
     "memo": false,
     "portfolio": {

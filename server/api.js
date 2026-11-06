@@ -1,6 +1,7 @@
 // Read API for the dashboard.
 import { Router } from 'express';
 import { appConfig } from './config.js';
+import { themeFor } from './theme.js';
 import { isMonth, bucketKey, bucketsFor, addMonths } from './periods.js';
 import { buildCoaTree } from './coa.js';
 import { deriveAll, metricDefs, linear, validateMetrics } from './metrics.js';
@@ -177,7 +178,7 @@ export function createApiRouter(db) {
   });
 
   // Behaviour config shared with the dashboard (never includes secrets).
-  api.get('/config', (req, res) => res.json({ ...appConfig, executiveView: publicExecutiveConfig(executive) }));
+  api.get('/config', (req, res) => res.json({ ...appConfig, executiveView: publicExecutiveConfig(executive), theme: themeFor(db) }));
 
   // Executive view: KPIs, trend, per-office performance, payer mix, cost structure, movers vs last year.
   api.get('/executive', (req, res) => {

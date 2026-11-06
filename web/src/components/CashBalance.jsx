@@ -167,7 +167,7 @@ function Aging({ data }) {
             </div>
             <div className="max-h-[340px] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-surface text-xs text-ink2">
+                <thead className="sticky top-0 bg-thead text-xs text-theadInk">
                   <tr><th className="py-1 text-left font-medium">{who}</th><th className="py-1 text-right font-medium">Overdue</th><th className="py-1 text-right font-medium">Total</th></tr>
                 </thead>
                 <tbody>
@@ -195,7 +195,7 @@ function Conversion({ data }) {
       {!rows.length ? <p className="py-6 text-center text-sm text-ink2">No cash flow data yet.</p> : (
         <div className="max-h-[360px] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-surface text-xs text-ink2">
+            <thead className="sticky top-0 bg-thead text-xs text-theadInk">
               <tr><th className="py-1 text-left font-medium">Company</th><th className="py-1 text-right font-medium">Net income</th><th className="py-1 text-right font-medium">Operating cash</th><th className="py-1 text-right font-medium">Conversion</th></tr>
             </thead>
             <tbody>
@@ -222,7 +222,7 @@ function Vendors({ data }) {
       {!v.top.length ? <p className="py-6 text-center text-sm text-ink2">No vendor spend yet.</p> : (
         <div className="max-h-[360px] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-surface text-xs text-ink2">
+            <thead className="sticky top-0 bg-thead text-xs text-theadInk">
               <tr><th className="py-1 text-left font-medium">Vendor</th><th className="py-1 text-right font-medium">Companies</th><th className="py-1 text-right font-medium">Spend</th><th className="hidden py-1 text-right font-medium sm:table-cell">Share</th><th className="hidden py-1 pl-2 text-right font-medium sm:table-cell">Trend</th></tr>
             </thead>
             <tbody>
@@ -255,7 +255,7 @@ function BalanceTable({ data }) {
       right={<button type="button" className="control text-sm" onClick={exportCsv}>Export CSV</button>}>
       <div className="max-h-[560px] overflow-auto">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="sticky top-0 z-10 bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+          <thead className="sticky top-0 z-10 bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
             <tr>{sortTh(sort, setSort, 'name', 'Company', 'text-left')}{cols.map(([k, l]) => sortTh(sort, setSort, k, l, 'text-right'))}</tr>
           </thead>
           <tbody>

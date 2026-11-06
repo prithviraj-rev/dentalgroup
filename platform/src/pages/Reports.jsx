@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { dashboardUrl } from '../api.js';
 import { useApp, can } from '../App.jsx';
 import { Card, Empty, PageHeader } from '../ui.jsx';
@@ -13,6 +13,7 @@ export default function Reports() {
   const { org } = useOutletContext();
   const [loaded, setLoaded] = useState(false);
   const [stamp] = useState(() => Date.now());
+  const tab = new URLSearchParams(useLocation().search).get('tab'); // from the shell's banner tabs on the other pages
   const embed = cfg.reports.embed;
   const src = dashboardUrl(cfg);
 
@@ -36,8 +37,8 @@ export default function Reports() {
         {!loaded && <div className="absolute inset-0 animate-pulse bg-[var(--wash)]" />}
         <iframe
           title={`${org.name} reports`}
-          key={stamp}
-          src={`${src}${src.includes('?') ? '&' : '?'}t=${stamp}`}
+          key={`${stamp}-${tab || ''}`}
+          src={`${src}${src.includes('?') ? '&' : '?'}t=${stamp}${tab ? `&tab=${encodeURIComponent(tab)}` : ''}`}
           onLoad={() => setLoaded(true)}
           className="block w-full border-0"
           style={{ height: embed.height }}

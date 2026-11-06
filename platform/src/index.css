@@ -2,24 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Same tokens as the P&L dashboard so the embedded reports and the shell read as one product.
-   --accent is overridden per organization (brand color) at runtime. */
+/* Same tokens as the P&L dashboard so the embedded reports and the shell read as one product (restyle 2026-10-29: cool slate
+   page, white cards, navy sidebar). --accent is overridden per organization (brand color) at runtime. */
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #898781;
-  --line: #e1e0d9;
-  --axis: #c3c2b7;
-  --ring: rgba(11, 11, 11, 0.1);
-  --wash: rgba(11, 11, 11, 0.04);
-  --accent: #2a78d6;
+  --page: #f3f5f9;
+  --surface: #ffffff;
+  --ink: #0f1b2d;
+  --ink-2: #4a5668;
+  --muted: #8a94a6;
+  --line: #e2e7ef;
+  --axis: #c3ccd9;
+  --ring: rgba(15, 27, 45, 0.1);
+  --wash: rgba(15, 27, 45, 0.04);
+  --accent: #1f4e8c;
+  --accent-bright: #5aa9ff;
+  --banner: #1d4ed8;
+  --banner-2: #2f6fe4;
+  --banner-mark: #ffffff;
+  --banner-h: 48px; /* the one banner strip: the sidebar's brand strip, the page banner and the dashboard's tab row share it */
+  /* Theme page tokens (server/theme.js): the side panel follows the banner, buttons and table headers follow the cards, until set. */
+  --sidebar: var(--banner);
+  --sidebar-2: var(--banner-2);
+  --sidebar-ink: var(--banner-ink, #ffffff);
+  --sidebar-mark: var(--banner-mark);
+  --toolbar: var(--surface);
+  --toolbar-line: var(--line);
+  --button: var(--surface);
+  --button-ink: var(--ink);
+  --pressed: var(--accent);
+  --pressed-ink: #ffffff;
+  --thead: var(--surface);
+  --thead-ink: var(--ink-2);
+  --table-line: var(--line);
+  --total-row: var(--page);
   --good: #0ca30c;
-  --good-text: #006300;
-  --warning: #fab219;
-  --critical: #d03b3b;
+  --good-text: #1a7f37;
+  --warning: #e0a000;
+  --critical: #c93c3c;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -28,16 +48,20 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --muted: #898781;
-    --line: #2c2c2a;
-    --axis: #383835;
+    --page: #0b1220;
+    --surface: #141c2b;
+    --ink: #f3f6fb;
+    --ink-2: #b8c2d2;
+    --muted: #7f8a9c;
+    --line: #26314a;
+    --axis: #35425d;
     --ring: rgba(255, 255, 255, 0.1);
     --wash: rgba(255, 255, 255, 0.05);
-    --good-text: #0ca30c;
+    --accent: #4d8fe0;
+    --accent-bright: #7cbcff;
+    --banner: #173fb0;
+    --banner-2: #2459c4;
+    --good-text: #3cbb5a;
     --critical: #e66767;
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -45,43 +69,45 @@
   }
 }
 
-html, body { background: var(--page); color: var(--ink); }
+html, body { background: var(--page); color: var(--ink); -webkit-font-smoothing: antialiased; }
 
-.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 2px 8px rgba(15, 27, 45, 0.04); }
 
 .control {
-  background: var(--surface);
-  border: 1px solid var(--ring);
+  background: var(--button);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--button-ink);
   font-size: 14px;
   padding: 6px 10px;
   height: 36px;
   width: 100%;
 }
+.control:hover { border-color: var(--axis); }
 .control:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 36px; padding: 0 14px; border-radius: 8px; font-size: 14px; font-weight: 500;
-  border: 1px solid var(--ring); background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   white-space: nowrap;
+  box-shadow: 0 1px 1px rgba(15, 27, 45, 0.04);
 }
 .btn:hover { background: var(--wash); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--accent); border-color: transparent; color: #fff; }
-.btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
-.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn-primary { background: var(--pressed); border-color: transparent; color: var(--pressed-ink); }
+.btn-primary:hover { background: var(--pressed); filter: brightness(1.08); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); box-shadow: none; }
 .btn-danger { color: var(--critical); }
 .btn-sm { height: 30px; padding: 0 10px; font-size: 13px; }
 
-.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); height: 32px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); height: 32px; }
 .seg button { padding: 0 10px; font-size: 13px; color: var(--ink-2); }
-.seg button + button { border-left: 1px solid var(--ring); }
-.seg button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed='true'] { background: var(--pressed); color: var(--pressed-ink); }
 
 .table { width: 100%; font-size: 14px; }
-.table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-2); padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.table th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--page); white-space: nowrap; }
 .table td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
 .table tbody tr:first-child td { border-top: 0; }
 .table tbody tr:hover td { background: var(--wash); }
@@ -90,3 +116,39 @@ html, body { background: var(--page); color: var(--ink); }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 14px; color: var(--ink-2); }
 .nav-item:hover { background: var(--wash); color: var(--ink); }
 .nav-item.active { background: var(--wash); color: var(--ink); font-weight: 500; box-shadow: inset 3px 0 0 var(--accent); }
+
+/* The sidebar and the phone top bar: navy, white text, the open module lit with a bright-accent bar (restyle 2026-10-29). */
+.sidebar { background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-2) 100%); color: var(--sidebar-ink); }
+.sidebar .nav-item, .sidebar .side-label, .sidebar .side-muted, .sidebar .btn-ghost { color: var(--sidebar-ink); opacity: 0.85; }
+.sidebar .nav-item.active, .sidebar .nav-item:hover, .sidebar .btn-ghost:hover { opacity: 1; }
+.sidebar .nav-item { color: rgba(255, 255, 255, 0.85); transition: background 0.15s, color 0.15s; }
+.sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.sidebar .nav-item.active { background: rgba(255, 255, 255, 0.14); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--sidebar-mark); }
+.sidebar .side-label { color: rgba(255, 255, 255, 0.5); }
+.sidebar .side-muted { color: rgba(255, 255, 255, 0.6); }
+.sidebar .side-foot { border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.sidebar .control { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); color: #fff; }
+.sidebar .control option { color: var(--ink); background: var(--surface); }
+.sidebar .btn-ghost { color: rgba(255, 255, 255, 0.75); }
+.sidebar .btn-ghost:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.sidebar .brand:hover .logo { box-shadow: 0 0 0 2px var(--accent-bright); }
+/* The brand strip: the top of the sidebar at the banner's height and colour, so it reads as the left end of the one banner. */
+.sidebar .brand-strip { height: var(--banner-h); margin: -12px -12px 0; padding: 0 12px; border-radius: 0; background: var(--sidebar); flex: 0 0 auto; }
+.sidebar nav.mini .brand-strip { margin: -8px -8px 0; padding: 0; width: calc(100% + 16px); }
+/* The page banner of every page that is not the embedded dashboard (which brings its own tab row): same gradient, height and
+   logo tile as the dashboard's .app-banner. */
+.page-banner { position: sticky; top: 0; z-index: 20; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--banner-h); padding: 0 8px; background: linear-gradient(90deg, var(--banner) 0%, var(--banner-2) 100%); color: var(--banner-ink); }
+.page-banner .banner-title { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; color: var(--banner-ink); }
+.page-banner .banner-title::after { content: ''; display: inline-block; width: 1px; height: 22px; margin: 0 8px 0 16px; background: rgba(255, 255, 255, 0.25); }
+.page-banner .tab { padding: 12px 16px; font-size: 16px; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap; color: var(--banner-ink); opacity: 0.85; }
+.page-banner .tab:hover { opacity: 1; }
+.page-banner .banner-link { font-size: 14px; color: var(--banner-ink); opacity: 0.85; white-space: nowrap; }
+.page-banner .banner-link:hover { opacity: 1; text-decoration: underline; }
+.banner-logo { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; background: #fff; color: var(--banner); font-size: 12px; font-weight: 700; object-fit: contain; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.sidebar .logo { transition: box-shadow 0.15s; background: #fff; color: var(--sidebar); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+.sidebar .avatar { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.topbar { background: linear-gradient(90deg, var(--sidebar) 0%, var(--sidebar-2) 100%); color: var(--sidebar-ink); }
+.topbar .menu-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* Sign-in page: the brand block sits on a navy band, the form card overlaps its lower edge. */
+.login-bg { background: linear-gradient(180deg, var(--banner) 0, var(--banner-2) 220px, var(--page) 220px); }

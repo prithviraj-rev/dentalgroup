@@ -53,6 +53,7 @@ const APP_CONFIG_DEFAULTS = {
   offices: { enabled: true, file: 'config/offices.json' },
   officesSheet: { enabled: true, file: 'config/offices-sheet.json', apiPath: 'office-sheet', label: 'Financial KPIs' },
   kpiDashboard: { enabled: true, file: 'config/kpi-dashboard.json', apiPath: 'kpi-dashboard', label: 'KPI dashboard', source: 'officesSheet' },
+  compareCharts: { enabled: true, label: 'Compare charts', source: 'officesSheet', defaultMetric: null, panels: null, maxSets: 8, periodYears: 6, periodMonths: 24, rememberPicks: true },
   rawSync: { file: 'config/raw-sync.json' },
   officeChart: { enabled: true, maxOffices: 8, metric: 'netIncome' },
   charts: {
@@ -156,7 +157,17 @@ export function loadAppConfig(file = appConfigPath) {
   if (cfg.officesSheet && cfg.officesSheet.controls !== undefined && !['header', 'inline'].includes(cfg.officesSheet.controls)) throw new Error('app.config.json: officesSheet.controls must be header (filters in the page header) or inline (filters in the list button bar)');
   if (!['always', 'stale', 'never'].includes(cfg.dashboard.syncButton)) throw new Error('app.config.json: dashboard.syncButton must be always | stale (only when the last sync is older than syncStaleHours) | never');
   if (!Number.isFinite(cfg.dashboard.syncStaleHours) || cfg.dashboard.syncStaleHours <= 0) throw new Error('app.config.json: dashboard.syncStaleHours must be a positive number of hours');
-  const TAB_IDS = ['executive', 'dashboard', 'analysis', 'categories', 'offices', 'officesSheet', 'kpi', 'group', 'cash', 'coa'];
+  const TAB_IDS = ['executive', 'dashboard', 'analysis', 'categories', 'offices', 'officesSheet', 'kpi', 'charts', 'group', 'cash', 'coa'];
+  // Compare charts tab (VJ 2026-10-30: "tables are very difficult for comparison"): the Side by side columns drawn as charts.
+  const cc = cfg.compareCharts;
+  if (typeof cc !== 'object' || cc === null) throw new Error('app.config.json: compareCharts must be an object');
+  if (typeof cc.enabled !== 'boolean') throw new Error('app.config.json: compareCharts.enabled must be true or false');
+  if (typeof cc.label !== 'string' || !cc.label.trim()) throw new Error('app.config.json: compareCharts.label must be a non-empty string (the tab name)');
+  if (!['officesSheet', 'offices'].includes(cc.source)) throw new Error('app.config.json: compareCharts.source must be officesSheet (rows of the Financial KPIs sheet) or offices (rows of config/offices.json)');
+  if (cc.defaultMetric !== null && (typeof cc.defaultMetric !== 'string' || !cc.defaultMetric.trim())) throw new Error('app.config.json: compareCharts.defaultMetric must be null (the collections row) or a row key of the source');
+  if (cc.panels !== null && (!Array.isArray(cc.panels) || !cc.panels.length || cc.panels.some((k) => typeof k !== 'string' || !k.trim()))) throw new Error('app.config.json: compareCharts.panels must be null (every row) or a non-empty list of row keys of the source');
+  for (const [k, lo, hi] of [['maxSets', 1, 8], ['periodYears', 1, 10], ['periodMonths', 1, 60]]) if (!Number.isInteger(cc[k]) || cc[k] < lo || cc[k] > hi) throw new Error(`app.config.json: compareCharts.${k} must be an integer ${lo}..${hi}`);
+  if (typeof cc.rememberPicks !== 'boolean') throw new Error('app.config.json: compareCharts.rememberPicks must be true (the browser remembers the picked companies and periods) or false');
   const tabs = cfg.dashboard.tabs;
   if (tabs !== null && (!Array.isArray(tabs) || !tabs.length || tabs.some((t) => !TAB_IDS.includes(t)))) throw new Error(`app.config.json: dashboard.tabs must be null (every tab) or a non-empty list from ${TAB_IDS.join(' | ')}`);
   if (!TAB_IDS.includes(cfg.dashboard.defaultTab)) throw new Error(`app.config.json: dashboard.defaultTab must be one of ${TAB_IDS.join(' | ')}`);

@@ -68,6 +68,32 @@ export function Tiles({ items, cols = 4 }) {
   );
 }
 
+/** Expand / collapse chevron: one clean stroke icon, turned down when open (same look in every table). */
+export const Chevron = ({ open }) => (
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" className="shrink-0 text-muted transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
+    <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+export const VALUE_OPTIONS = [['amount', 'Amounts'], ['pct', '%'], ['both', 'Both']]; // amounts | % of collections (income) | both in one cell
+/** A figure; never coloured (VJ 2026-10-29: no red / green in the tables). */
+export const Money = ({ v, bold }) => <span className={`tabular ${bold ? 'font-semibold' : ''}`}>{v == null ? '–' : money(v)}</span>;
+/** One button bar: a left group (back, title, view, companies, switches), Accrual / Cash next to it, the period at the right,
+ *  end = Export CSV always last. sticky = stays under the tab row while its card scrolls past (VJ 2026-10-29). */
+export const Toolbar = ({ head = null, left, center = null, right = null, end = null, sticky = false, periodLeft = false }) => (
+  <div className={`toolbar ${sticky ? 'banner' : ''} ${periodLeft ? 'period-left' : ''}`}>
+    {head && <div className="toolbar-head">{head}</div>}
+    <div>{left}</div>
+    {center ? <div>{center}</div> : <span />}
+    {right || end ? <div className="justify-end">{right}{end}</div> : null}
+  </div>
+);
+/** Back to the list: an arrow icon only (VJ 2026-10-29), the label stays for screen readers and the tooltip. */
+export const BackLink = ({ onBack, label = 'Go back' }) => (
+  <button type="button" className="control inline-flex h-8 w-8 shrink-0 items-center justify-center p-0 text-ink2 hover:bg-page hover:text-ink" onClick={onBack} title={label} aria-label={label}>
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  </button>
+);
+
 export function Seg({ label, options, value, onChange, small = false }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">

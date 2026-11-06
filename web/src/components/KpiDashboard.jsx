@@ -155,7 +155,7 @@ function Leaderboard({ data, x, onOpenOffice, sheet }) {
       right={<button type="button" className="control text-sm" onClick={csv}>Export CSV</button>}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="text-xs text-ink2">
+          <thead className="text-xs text-theadInk">
             <tr className="border-b border-[var(--line)]">
               {sortTh(sort, setSort, 'name', 'Office', 'text-left')}
               {cols.map((c) => sortTh(sort, setSort, c.key, c.label, 'text-right'))}
@@ -319,7 +319,7 @@ function CostStructure({ data, x }) {
     <Section title="Cost structure" subtitle="Each statement row as a share of net collections. Darker = higher than other offices for that row. First line: all offices together.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] text-xs">
-          <thead className="text-ink2">
+          <thead className="text-theadInk">
             <tr className="border-b border-[var(--line)]">
               <th scope="col" className="sticky left-0 z-[1] bg-surface px-2 py-2 text-left font-medium">Office</th>
               <th scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium">Net collections</th>

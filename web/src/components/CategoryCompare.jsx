@@ -384,7 +384,7 @@ function Matrix({ model, ui, sort, onSort, picked, onPick, focus, onFocus, drill
     >
       <div className="max-h-[640px] overflow-auto rounded-lg border border-[var(--line)]">
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-20 bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+          <thead className="sticky top-0 z-20 bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
             <tr>
               <th scope="col" className="sticky left-0 z-30 w-8 bg-surface px-2"><span className="sr-only">Show in trend</span></th>
               {th('__name', ui.compareBy === 'office' ? 'Office' : dimLabel(ui.compareBy), 'sticky left-8 z-30 bg-surface text-left')}
@@ -497,7 +497,7 @@ function Drill({ data, model, ui, drill, onClose }) {
       right={<button type="button" className="text-sm text-accent hover:underline" onClick={onClose}>Close</button>}>
       <div className="max-h-[360px] overflow-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-surface text-xs text-ink2">
+          <thead className="sticky top-0 bg-thead text-xs text-theadInk">
             <tr>
               <th className="py-1 text-left font-medium">Account</th>
               {col.members.length > 1 && <th className="py-1 text-left font-medium">Category</th>}
@@ -555,7 +555,7 @@ function Transactions({ realmId, accountIds, from, to }) {
   return (
     <div className="max-h-[280px] overflow-auto">
       <table className="w-full min-w-[560px] text-xs">
-        <thead className="sticky top-0 bg-[var(--page)] text-ink2">
+        <thead className="sticky top-0 bg-total text-theadInk">
           <tr><th className="py-1 text-left font-medium">Date</th><th className="text-left font-medium">Type</th><th className="text-left font-medium">No.</th><th className="text-left font-medium">Name</th><th className="text-left font-medium">Memo</th><th className="text-right font-medium">Amount</th></tr>
         </thead>
         <tbody>

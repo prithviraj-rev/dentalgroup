@@ -14,6 +14,7 @@ import { createApiRouter, parseFilters } from './api.js';
 import { createCategoryViewRouter } from './categoryView.js';
 import { createFinanceRouter } from './finance/api.js';
 import { createOfficesRouter } from './offices/api.js';
+import { loadOfficesConfig } from './offices/config.js';
 import { startDailySync, validateSchedule } from './scheduler.js';
 import { mountPlatform } from './platform/index.js';
 
@@ -201,6 +202,15 @@ if (appConfig.offices?.enabled !== false) app.use('/api', createOfficesRouter(db
 // Second Offices tab built from the client's own KPI sheet (same code, other row rules; config/offices-sheet.json).
 if (appConfig.offices?.enabled !== false && appConfig.officesSheet?.enabled !== false) {
   app.use('/api', createOfficesRouter(db, { parseFilters, file: path.resolve(ROOT, appConfig.officesSheet.file), base: appConfig.officesSheet.apiPath, analysis: false, dashboard: kpiDashboardFor('officesSheet') }));
+}
+// Compare charts tab: its metric and panel rows must be rows of the source statement (config/offices-sheet.json or config/offices.json).
+{
+  const cc = appConfig.compareCharts;
+  if (cc?.enabled !== false && appConfig.offices?.enabled !== false && (cc.source !== 'officesSheet' || appConfig.officesSheet?.enabled !== false)) {
+    const file = cc.source === 'offices' ? appConfig.offices.file : appConfig.officesSheet.file;
+    const keys = loadOfficesConfig(path.resolve(ROOT, file)).rows.map((r) => r.key);
+    for (const k of [cc.defaultMetric, ...(cc.panels || [])].filter(Boolean)) if (!keys.includes(k)) throw new Error(`app.config.json: compareCharts names row "${k}" which is not a row of ${file} (${keys.join(', ')})`);
+  }
 }
 
 // ---------- Connections page ----------

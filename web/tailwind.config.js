@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
       },
       colors: {
         page: 'var(--page)',
@@ -14,9 +14,15 @@ export default {
         ink2: 'var(--ink-2)',
         muted: 'var(--muted)',
         line: 'var(--line)',
-        accent: 'var(--series-1)',
+        accent: 'var(--accent)',
         good: 'var(--good)',
         bad: 'var(--bad)',
+        // Theme page tokens (server/theme.js)
+        thead: 'var(--thead)',
+        theadInk: 'var(--thead-ink)',
+        total: 'var(--total-row)',
+        pressed: 'var(--pressed)',
+        pressedInk: 'var(--pressed-ink)',
       },
     },
   },

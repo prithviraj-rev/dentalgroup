@@ -38,17 +38,17 @@ export default function Login() {
   for (const a of demo?.accounts || []) (groups[a.org || 'Platform'] ||= []).push(a);
 
   return (
-    <div className="flex min-h-screen items-start justify-center px-4 py-[8vh]">
+    <div className="login-bg flex min-h-screen items-start justify-center px-4 pt-14">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white" style={{ background: cfg.platform.primaryColor }}>{cfg.platform.logoText}</span>
+        <div className="mb-8 flex items-center gap-3 text-white">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sm font-bold" style={{ color: cfg.platform.primaryColor }}>{cfg.platform.logoText}</span>
           <div>
-            <div className="text-lg font-semibold">{cfg.platform.name}</div>
-            <div className="text-sm text-ink2">{cfg.platform.tagline}</div>
+            <div className="text-xl font-semibold tracking-wide">{cfg.platform.name}</div>
+            <div className="text-sm text-white/70">{cfg.platform.tagline}</div>
           </div>
         </div>
 
-        <form className="card flex flex-col gap-4 p-6" onSubmit={submit}>
+        <form className="card flex flex-col gap-4 p-6 shadow-xl" onSubmit={submit}>
           <h1 className="text-base font-medium">Sign in</h1>
           <Field label="Email">
             <input className="control" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />

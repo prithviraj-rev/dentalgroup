@@ -3,8 +3,9 @@ import { ResponsiveContainer, BarChart, LineChart, Bar, Line, Cell, XAxis, YAxis
 import { api } from '../api.js';
 import {
   Section, Tiles, Seg, ErrorBox, Loading, Empty, Status, SourceLine, ChartTip, sortTh, sorter, downloadCsv, useApi, useNarrow,
-  POS, NEG, axisTick, pct1, signedPct, money, compact, monthLabel,
+  POS, NEG, axisTick, pct1, signedPct, money, compact, monthLabel, Chevron, Money, Toolbar, BackLink, VALUE_OPTIONS,
 } from './ui.jsx';
+import SideBySide from './SideBySide.jsx';
 
 // Offices: each dental practice and its sub-DSO read as one office. Portfolio (all offices, flags) and one
 // office (statement by month, balance sheet, trends). Data from /api/office-view (config/offices.json),
@@ -12,16 +13,10 @@ import {
 
 const TONE = { bad: 'bg-[color-mix(in_oklab,var(--bad)_14%,var(--surface))] text-bad', warn: 'bg-[color-mix(in_oklab,var(--series-4)_22%,var(--surface))] text-[color-mix(in_oklab,var(--series-4)_70%,var(--ink))]', info: 'bg-[color-mix(in_oklab,var(--series-1)_14%,var(--surface))] text-[var(--series-1)]', good: 'bg-[color-mix(in_oklab,var(--good)_14%,var(--surface))] text-good' };
 const Pill = ({ tone = 'info', children, title }) => <span title={title} className={`inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium ${TONE[tone] || TONE.info}`}>{children}</span>;
-const Tag = ({ children, title }) => <span title={title} className="inline-flex max-w-[220px] items-center truncate rounded bg-page px-1.5 py-0.5 text-[11px] text-ink2 ring-1 ring-[var(--line)]">{children}</span>;
+const Tag = ({ children, title }) => <span title={title} className="inline-flex max-w-[220px] items-center truncate rounded bg-total px-1.5 py-0.5 text-[11px] text-ink2 ring-1 ring-[var(--line)]">{children}</span>;
 const monthEndLabel = (m) => { if (!m) return ''; const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); };
 const ago = (iso) => { if (!iso) return 'never'; const h = (Date.now() - new Date(iso)) / 36e5; return h < 1 ? 'just now' : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`; };
 const shortMonth = (m) => { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1, 1)); return d.toLocaleString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(' ', " '"); };
-/** Expand / collapse chevron: one clean stroke icon, turned down when open (same look in every table of this tab). */
-const Chevron = ({ open }) => (
-  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" className="shrink-0 text-muted transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
-    <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 /** Month columns grouped as monthly | quarterly | yearly: [{ key, label, months }]. No granularity -> no columns (the period total only). */
 const bucketsOf = (months, gran) => {
   if (!gran) return [];
@@ -37,9 +32,7 @@ const bucketsOf = (months, gran) => {
 };
 const sumMonths = (map, b) => b.months.reduce((t, m) => t + (map?.[m] || 0), 0);
 const COLUMN_OPTIONS = [['month', 'Monthly'], ['quarter', 'Quarterly'], ['year', 'Yearly']];
-const VALUE_OPTIONS = [['amount', 'Amounts'], ['pct', '%'], ['both', 'Both']]; // amounts | % of collections (income) | both in one cell
 const basisLabel = (d) => (d?.basis === 'cash' ? 'Cash basis' : 'Accrual basis');
-const Money = ({ v, bold }) => <span className={`tabular ${bold ? 'font-semibold' : ''}`}>{v == null ? '–' : money(v)}</span>;
 
 export default function Offices({ filters, officeParam, singleOffice, reloadKey, base = 'office-view', controls = null, customRange = null }) {
   const [period, setPeriod] = useState(null);
@@ -127,7 +120,7 @@ function CombinePanel({ setup, initial, onClose, onSaved, base = 'office-view' }
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="max-h-[420px] overflow-auto rounded border border-[var(--line)]">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+            <thead className="sticky top-0 bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
               <tr><th scope="col" className="w-8 px-2 py-2" aria-label="Pick" /><th scope="col" className="px-2 py-2 text-left font-medium">Company</th><th scope="col" className="px-2 py-2 text-left font-medium">City</th><th scope="col" className="px-2 py-2 text-left font-medium">Type</th><th scope="col" className="px-2 py-2 text-left font-medium">Currently in</th></tr>
             </thead>
             <tbody>
@@ -187,7 +180,7 @@ const PCT_COLS = { ebitdaMargin: pct1, vsPrior: signedPct };
 const valueOf = (o, key) => (o.values && key in o.values ? o.values[key] : o[key]);
 const SORT_LABEL = { name: 'office name', netCollections: 'net collections', ebitdaMargin: 'EBITDA margin', officeEbitda: 'office EBITDA', cash: 'cash', vsPrior: 'change vs prior year' };
 const ValueCell = ({ col, v, bold }) => (
-  <td className={`whitespace-nowrap px-2 py-2 text-right align-top tabular ${col.key === 'vsPrior' ? 'bg-page' : ''} ${bold ? 'font-semibold' : ''}`}>
+  <td className={`whitespace-nowrap px-2 py-2 text-right align-top tabular ${col.key === 'vsPrior' ? 'bg-total' : ''} ${bold ? 'font-semibold' : ''}`}>
     {PCT_COLS[col.key] ? PCT_COLS[col.key](v) : <Money v={v} bold={bold} />}
   </td>
 );
@@ -236,7 +229,7 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
   };
   const combos = data.combined || [];
   const ready = pickedOffices.length >= 2 && oneBucket;
-  const actionCls = `h-8 rounded-lg px-3 text-xs font-medium transition-colors ${ready ? 'bg-accent text-white shadow-sm' : 'control opacity-50'}`;
+  const actionCls = `h-8 rounded-lg px-3 text-xs font-medium transition-colors ${ready ? 'bg-pressed text-pressedInk shadow-sm' : 'control opacity-50'}`;
   const allTotal = subtotalOf(rows, columns); // "All companies" line at the top of the list
   // Column names on every open group header, sortable like the main header (same sort for the whole list); a group may
   // name a column differently (bucket columns, VJ 2026-10-29: "Revenue" outside the dental practices).
@@ -332,11 +325,11 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
         </div>
         <div className="mt-1 overflow-x-auto lg:overflow-visible">
           <table className="w-full min-w-[760px] text-xs">
-            <thead className="text-xs text-ink2">
+            <thead className="text-xs text-theadInk">
               <tr className="border-b border-[var(--line)] [&>th]:sticky [&>th]:top-[var(--hdr,0px)] [&>th]:z-[2] [&>th]:bg-surface [&>th]:shadow-[0_1px_0_var(--line)]">
                 <th scope="col" className="w-8 px-2 py-2" />
                 {sortTh(sort, setSort, 'name', pg.nameColumn || (pg.label && pg.label !== 'Offices' ? pg.label : 'Office'), 'text-left')}
-                {columns.map((c) => sortTh(sort, setSort, c.key, c.label, `text-right${c.key === 'vsPrior' ? ' bg-page' : ''}`))}
+                {columns.map((c) => sortTh(sort, setSort, c.key, c.label, `text-right${c.key === 'vsPrior' ? ' bg-total' : ''}`))}
               </tr>
             </thead>
             <tbody>
@@ -367,7 +360,7 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
                     </tr>
                     {open && (g.rows.length === 0 ? <tr className="border-b border-[var(--line)]"><td /><td colSpan={columns.length + 1} className="px-2 py-2 text-xs text-muted">No companies in this group yet.</td></tr> : g.rows.map(officeRow))}
                     {open && g.rows.length > 0 && (
-                      <tr className="border-b-2 border-[var(--line)] bg-page">
+                      <tr className="border-b-2 border-[var(--line)] bg-total">
                         <td />
                         <td className="px-2 py-0.5 text-xs font-semibold">{g.label} total</td>
                         {columns.map((c) => <ValueCell key={c.key} col={c} v={sub[c.key]} bold />)}
@@ -385,7 +378,7 @@ function Portfolio({ data, loading, periodSeg, onOpen, onCombine, onCombineNow, 
           {combos.length === 0 ? <p className="text-sm text-ink2">None yet. Tick two or more offices above and press Combine.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
-                <thead className="text-xs text-ink2"><tr className="border-b border-[var(--line)]"><th scope="col" className="px-2 py-2 text-left font-medium">Combined office</th><th scope="col" className="px-2 py-2 text-right font-medium">Net collections</th><th scope="col" className="px-2 py-2 text-right font-medium">EBITDA margin</th><th scope="col" className="px-2 py-2 text-right font-medium">Office EBITDA</th><th scope="col" className="px-2 py-2 text-right font-medium">Cash</th><th scope="col" className="px-2 py-2" /></tr></thead>
+                <thead className="text-xs text-theadInk"><tr className="border-b border-[var(--line)]"><th scope="col" className="px-2 py-2 text-left font-medium">Combined office</th><th scope="col" className="px-2 py-2 text-right font-medium">Net collections</th><th scope="col" className="px-2 py-2 text-right font-medium">EBITDA margin</th><th scope="col" className="px-2 py-2 text-right font-medium">Office EBITDA</th><th scope="col" className="px-2 py-2 text-right font-medium">Cash</th><th scope="col" className="px-2 py-2" /></tr></thead>
                 <tbody>
                   {combos.map((o) => (
                     <tr key={o.key} className="cursor-pointer border-b border-[var(--line)] hover:bg-page" onClick={() => onOpen(o.key)}>
@@ -452,28 +445,28 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
   const bold = (r) => ['feesSubtotal', 'ebitda', 'cashFlow'].includes(r.role);
   const frozen = freeze && !narrow;
   const two = values === 'both'; // amount and % of collections together in one cell per office (2026-10-29: no gap between them)
-  // Frozen "Grand total" column: the row label is 200px wide, the amount cell 96px (160px with the % beside it): sticky offsets.
-  const stickyCls = (i) => (frozen && i === 0 ? `sticky left-[200px] z-[1] ${two ? 'w-[160px] min-w-[160px]' : 'w-[96px] min-w-[96px]'}` : '');
-  const labelCls = 'sticky left-0 z-[1] w-[200px] min-w-[200px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap';
+  // Frozen "Grand total" column: the row label is 260px wide and wraps (VJ 2026-10-29: never cut), the amount cell 96px (160px with the % beside it): sticky offsets.
+  const stickyCls = (i) => (frozen && i === 0 ? `sticky left-[260px] z-[1] ${two ? 'w-[160px] min-w-[160px]' : 'w-[96px] min-w-[96px]'}` : '');
+  const labelCls = 'sticky left-0 z-[1] w-[260px] min-w-[260px] max-w-[260px] whitespace-normal break-words';
   /** Two header lines when the office has a short name: "Admire Dental" over "Branford", so more offices fit left to right. */
   const nameLines = (c) => (c.short && c.name.endsWith(c.short) && c.name.length > c.short.length ? [c.name.slice(0, -c.short.length).trim(), c.short] : [c.name]);
   const isOpen = (k) => (all ? open[k] !== false : Boolean(open[k]));
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !isOpen(k) }));
-  const colCls = (c, i) => `${i === 0 ? 'bg-page' : ''} ${focus && focus !== c.key ? 'opacity-40' : ''} ${focus === c.key ? 'bg-[color-mix(in_oklab,var(--series-1)_12%,var(--surface))]' : ''}`;
+  const colCls = (c, i) => `${i === 0 ? 'bg-total' : ''} ${focus && focus !== c.key ? 'opacity-40' : ''} ${focus === c.key ? 'bg-[color-mix(in_oklab,var(--series-1)_12%,var(--surface))]' : ''}`;
   /** The cell of one office for one value: Amounts, %, or Both = the amount with the % right beside it (fixed 48px, so both stay aligned). */
   const cells = (c, i, v, p, { bold: b = false, small = false } = {}) => {
-    const cls = `${colCls(c, i)} ${small ? 'text-[11px]' : ''}`;
+    const cls = `${colCls(c, i)} ${small ? 'text-xs' : ''}`;
     if (values === 'pct') return [<td key={c.key} className={`tabular whitespace-nowrap px-1.5 py-0.5 text-right align-top ${b ? 'font-semibold' : ''} ${cls} ${stickyCls(i)}`}>{p == null ? '–' : pct1(p)}</td>];
     const amount = v == null ? <span className="text-muted">–</span> : <Money v={v} bold={b} />;
     return [<td key={c.key} className={`whitespace-nowrap px-1.5 py-0.5 text-right align-top ${b ? 'font-semibold' : ''} ${cls} ${stickyCls(i)}`}>
-      {two ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><span>{amount}</span><span className="tabular text-[11px] font-normal text-muted">{p == null ? '–' : pct1(p)}</span></span> : amount}
+      {two ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><span>{amount}</span><span className="tabular text-xs font-normal text-muted">{p == null ? '–' : pct1(p)}</span></span> : amount}
     </td>];
   };
   const exportCsv = () => downloadCsv(`compare-${data.asOf}.csv`, [
     ['Row', 'Account', ...cols.map((c) => c.name)],
     ...data.rows.flatMap((r) => [[r.label, '', ...cols.map((c) => c.values[r.key])], ...(cols[0].accounts[r.key] || []).map((a) => ['', a.fullName, ...cols.map((c) => (c.accounts[r.key] || []).find((x) => x.fullName === a.fullName)?.period ?? '')])]),
   ]);
-  const rowCls = (r) => (bold(r) || r.role === 'collections' ? 'bg-page' : '');
+  const rowCls = (r) => (bold(r) || r.role === 'collections' ? 'bg-total' : '');
   const body = data.rows.flatMap((r) => {
     const accounts = cols[0].accounts[r.key] || []; // the consolidated list = every account seen in any office
     const expandable = accounts.length > 0;
@@ -494,7 +487,7 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
     )];
     if (expandable && isOpen(r.key)) for (const a of accounts) out.push(
       <tr key={`${r.key}|${a.fullName}`} className="border-t border-[var(--line)] text-ink2">
-        <th scope="row" className={`${labelCls} bg-surface px-2 py-0.5 text-left text-[11px] font-normal`} style={{ paddingLeft: 26 }} title={a.fullName}>
+        <th scope="row" className={`${labelCls} bg-surface px-2 py-0.5 text-left text-xs font-normal`} style={{ paddingLeft: 26 }} title={a.fullName}>
           {a.account}{a.offices > 1 ? <span className="ml-1 text-[10px] text-muted">×{a.offices}</span> : null}
         </th>
         {cols.map((c, i) => {
@@ -506,11 +499,13 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
     );
     return out;
   });
+  const totalLabel = data.months?.length ? (data.months.length === 1 ? monthLabel(data.months[0]) : `${monthLabel(data.months[0])} – ${monthLabel(data.months.at(-1))}`) : null;
   const head = (c, i) => {
     const lines = nameLines(c);
-    const label = lines.length === 2 ? <><span className="block font-normal text-muted">{lines[0]}</span><span className="block">{lines[1]}</span></> : c.name;
+    const label = i === 0 && totalLabel ? <><span className="block">{c.name}</span><span className="block font-normal text-muted">{totalLabel}</span></>
+      : lines.length === 2 ? <><span className="block font-normal text-muted">{lines[0]}</span><span className="block">{lines[1]}</span></> : c.name;
     return (
-      <th key={c.key} scope="col" className={`whitespace-nowrap px-1.5 py-1.5 text-right align-bottom font-medium ${colCls(c, i)} ${frozen && i === 0 ? 'sticky left-[200px] z-[3]' : ''}`} title={c.companies ? c.companies.map((x) => x.name).join(' + ') : undefined}>
+      <th key={c.key} scope="col" className={`whitespace-nowrap px-1.5 py-1.5 text-right align-bottom font-medium ${colCls(c, i)} ${frozen && i === 0 ? 'sticky left-[260px] z-[3]' : ''}`} title={c.companies ? c.companies.map((x) => x.name).join(' + ') : undefined}>
         {i === 0 ? label : <button type="button" className="text-right hover:underline" aria-pressed={focus === c.key} onClick={() => setFocus(focus === c.key ? null : c.key)}>{label}</button>}
       </th>
     );
@@ -521,9 +516,8 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
   const periodOf = (d) => (d.period.key === 'month' ? monthLabel(d.asOf) : `${monthLabel(d.period.from)} to ${monthLabel(d.period.to)}`);
   const bar = (title, d, p, setP) => (switches, exportBtn) => (
     <Toolbar sticky
-      head={<><BackLink onBack={onBack} /><span className="toolbar-title">{title}</span><span className="toolbar-note">{periodOf(d)}</span>{companiesNote}</>}
+      head={<><BackLink onBack={onBack} /><span className="toolbar-title">{title}</span><span className="toolbar-note">{periodOf(d)}</span>{companiesNote}{companiesCtl}</>}
       left={<>
-        {companiesCtl}
         {switches}
       </>}
       center={controls ? controls({ period: false, companies: false, sync: false }) : null}
@@ -534,10 +528,10 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
     <div className={`grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
       <Section left={bar(titles.statement || 'Office statement', data, p1, setP1)(<Seg small value={values} onChange={setValues} options={VALUE_OPTIONS} />, <button type="button" className="control h-8 text-sm" onClick={exportCsv}>Export CSV</button>)}>
         <div className="max-h-[75vh] overflow-auto">
-          <table className="cols-lined min-w-full text-xs">
-            <thead className="sticky top-0 z-[2] bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+          <table className="cols-lined report-table min-w-full">
+            <thead className="sticky top-0 z-[2] bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
               <tr>
-                <th scope="col" className="sticky left-0 z-[3] w-[200px] min-w-[200px] max-w-[200px] bg-surface px-2 py-1.5 text-left align-bottom font-medium">
+                <th scope="col" className="sticky left-0 z-[3] w-[260px] min-w-[260px] max-w-[260px] bg-thead px-2 py-1.5 text-left align-bottom font-medium">
                   <span className="flex items-center gap-2">
                     <button type="button" className="whitespace-nowrap rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={all} onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button>
                     {/* VJ 2026-10-29: Freeze total sits next to Expand all in the table header, not in the toolbar. */}
@@ -557,6 +551,9 @@ function Compare({ keys, q, base, periodSeg, onBack, reloadKey, controls = null,
           byOffice="Grand total" focus={focus} onFocus={setFocus} freeze={frozen} freezeOn={freeze} onFreeze={setFreeze} nameLines={nameLines} offices={data2.offices}
           bar={bar(titles.pl || 'Combined profit and loss', data2, p2, setP2)} />
       ) : r2.error ? <ErrorBox title="Could not load the profit and loss for this period" error={r2.error} /> : <Loading />)}
+      {data.page?.sections?.includes('sideBySide') && q.to && (
+        <SideBySide ids={data.offices.flatMap((o) => o.companies.map((c) => c.realmId))} q={q} base={base} lastFull={q.to} controls={controls} onBack={onBack} title={titles.sideBySide || 'Synopsis comparison'} reloadKey={reloadKey} />
+      )}
       <SourceLine source={data.source} />
     </div>
   );
@@ -569,7 +566,7 @@ function Chip({ active, tone, label, count, onClick }) {
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${active ? 'border-accent bg-[color-mix(in_oklab,var(--series-1)_12%,var(--surface))] font-medium' : 'border-[var(--line)] hover:bg-page'}`}>
       <span className="inline-block h-2 w-2 rounded-full" style={{ background: dot }} aria-hidden="true" />
       {label}
-      <span className="rounded-full bg-page px-1.5 text-[10px] text-ink2">{count}</span>
+      <span className="rounded-full bg-total px-1.5 text-[10px] text-ink2">{count}</span>
     </button>
   );
 }
@@ -612,9 +609,8 @@ function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onC
   // page makes combinations from the list and the companies popup).
   const bar = (title, d, p, setP) => (switches, exportBtn) => (
     <Toolbar sticky periodLeft
-      head={<>{canBack && <BackLink onBack={onBack} />}<span className="toolbar-title">{title}</span><span className="toolbar-note">{periodOf(d)}</span>{viewNote}</>}
+      head={<>{canBack && <BackLink onBack={onBack} />}<span className="toolbar-title">{title}</span><span className="toolbar-note">{periodOf(d)}</span>{viewNote}{companiesCtl}</>}
       left={<>
-        {companiesCtl}
         {switches}
         {columnsSeg}
         {onCombine && !compactHead && <button type="button" className="control h-8 text-sm" onClick={() => onCombine({ id: o.id, name: o.name, city: o.city, state: o.state, companies: o.companies })}>{o.combined ? 'Edit' : 'Combine with…'}</button>}
@@ -673,16 +669,6 @@ function OfficeDetail({ officeKey, q, reloadKey, periodSeg, onBack, canBack, onC
   );
 }
 
-/** One button bar: a left group (back, title, view, companies, switches), Accrual / Cash next to it, the period at the right,
- *  end = Export CSV always last. sticky = stays under the tab row while its card scrolls past (VJ 2026-10-29). */
-const Toolbar = ({ head = null, left, center = null, right = null, end = null, sticky = false, periodLeft = false }) => (
-  <div className={`toolbar ${sticky ? 'banner' : ''} ${periodLeft ? 'period-left' : ''}`}>
-    {head && <div className="toolbar-head">{head}</div>}
-    <div>{left}</div>
-    {center ? <div>{center}</div> : <span />}
-    {right || end ? <div className="justify-end">{right}{end}</div> : null}
-  </div>
-);
 /** A column width the user set by dragging, remembered per table in localStorage (null = the browser's own width). */
 function useColumnWidth(storageKey) {
   const [width, setWidth] = useState(() => { try { const v = Number(localStorage.getItem(storageKey)); return v >= 40 ? v : null; } catch { return null; } });
@@ -715,12 +701,6 @@ const stackLabel = (label) => {
   const i = String(label).lastIndexOf(' ');
   return i > 0 ? <><span className="block">{label.slice(0, i)}</span><span className="block font-normal text-muted">{label.slice(i + 1)}</span></> : label;
 };
-/** Back to the list: an arrow icon only (VJ 2026-10-29), the label stays for screen readers and the tooltip. */
-const BackLink = ({ onBack, label = 'Go back' }) => (
-  <button type="button" className="control inline-flex h-8 w-8 shrink-0 items-center justify-center p-0 text-ink2 hover:bg-page hover:text-ink" onClick={onBack} title={label} aria-label={label}>
-    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-  </button>
-);
 
 const ROLE_STYLE = { feesSubtotal: 'subtotal', ebitda: 'subtotal', cashFlow: 'subtotal', collections: 'head', fees: 'plain' };
 
@@ -750,16 +730,16 @@ function Statement({ data, cols = null, bar }) {
   const denOf = (b) => (coll ? (b ? sumMonths(coll.months, b) : coll.period) : 0);
   const pctTxt = (v, den) => (v == null || !den ? '–' : pct1(v / den));
   const show = (v, den, bold) => (values === 'pct' ? <span className={`tabular ${bold ? 'font-semibold' : ''}`}>{pctTxt(v, den)}</span>
-    : values === 'both' ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><Money v={v} bold={bold} /><span className="text-[11px] font-normal text-muted">{pctTxt(v, den)}</span></span>
+    : values === 'both' ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><Money v={v} bold={bold} /><span className="text-xs font-normal text-muted">{pctTxt(v, den)}</span></span>
     : <Money v={v} bold={bold} />);
   const cell = (v, bold, den) => <td className={`whitespace-nowrap px-2 py-1 text-right ${bold ? 'font-semibold' : ''}`}>{show(v, den, bold)}</td>;
   const line = (r, depth, key, expandable, sub, memoSign) => {
     const style = ROLE_STYLE[r.role] || (depth ? 'child' : 'plain');
     const bold = style === 'subtotal' || style === 'head';
-    const cls = style === 'subtotal' || style === 'head' ? 'bg-page' : depth ? 'text-ink2' : '';
+    const cls = style === 'subtotal' || style === 'head' ? 'bg-total' : depth ? 'text-ink2' : '';
     return (
       <tr key={key} className={`border-t border-[var(--line)] ${cls}`}>
-        <th scope="row" className={`sticky left-0 z-[1] whitespace-nowrap px-2 py-1.5 text-left font-normal ${style === 'subtotal' || style === 'head' ? 'bg-page' : 'bg-surface'}`} style={{ paddingLeft: 8 + depth * 18 }}>
+        <th scope="row" className={`sticky left-0 z-[1] whitespace-nowrap px-2 py-1.5 text-left font-normal ${style === 'subtotal' || style === 'head' ? 'bg-total' : 'bg-surface'}`} style={{ paddingLeft: 8 + depth * 18 }}>
           {expandable ? (
             <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={isOpen(key)} onClick={() => toggle(key)}>
               <Chevron open={isOpen(key)} /><span className={bold ? 'font-semibold' : ''}>{r.label}</span>
@@ -768,7 +748,7 @@ function Statement({ data, cols = null, bar }) {
           {memoSign != null && !depth && <span className="ml-2 text-[10px] text-muted">{memoSign > 0 ? 'income' : 'expense'}</span>}
         </th>
         {buckets.map((b) => <React.Fragment key={b.key}>{cell(sumMonths(r.months, b), bold, denOf(b))}</React.Fragment>)}
-        <td className={`whitespace-nowrap bg-page px-2 py-1.5 text-right ${bold ? 'font-semibold' : ''}`}>{show(r.period, denOf(null), bold)}</td>
+        <td className={`whitespace-nowrap bg-total px-2 py-1.5 text-right ${bold ? 'font-semibold' : ''}`}>{show(r.period, denOf(null), bold)}</td>
       </tr>
     );
   };
@@ -781,17 +761,17 @@ function Statement({ data, cols = null, bar }) {
   return (
     <Section left={bar(<Seg small value={values} onChange={setValues} options={VALUE_OPTIONS} />, <button type="button" className="control h-8 text-sm" onClick={exportCsv}>Export CSV</button>)}>
       <div className="max-h-[75vh] overflow-auto">
-        <table className={`cols-lined w-full text-xs ${colW || labelColW ? '[&_td]:overflow-hidden [&_td]:text-ellipsis' : ''}`} style={{ minWidth: narrow ? 0 : (labelColW || 240) + (buckets.length + 1) * (colW || 84), tableLayout: colW || labelColW ? 'fixed' : 'auto' }}>
-          <thead className="sticky top-0 z-[2] bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
+        <table className={`cols-lined report-table w-full ${colW || labelColW ? '[&_td]:overflow-hidden [&_td]:text-ellipsis' : ''}`} style={{ minWidth: narrow ? 0 : (labelColW || 240) + (buckets.length + 1) * (colW || 84), tableLayout: colW || labelColW ? 'fixed' : 'auto' }}>
+          <thead className="sticky top-0 z-[2] bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
             <tr>
-              <th scope="col" className="relative sticky left-0 z-[3] bg-surface px-2 py-2 text-left font-medium" style={colStyle(labelColW)}>
+              <th scope="col" className="relative sticky left-0 z-[3] bg-thead px-2 py-2 text-left font-medium" style={colStyle(labelColW)}>
                 <span className="flex items-center gap-2">
                   <button type="button" className="whitespace-nowrap rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={all} onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button>
                 </span>
                 <ColResizer onResize={setLabelColW} title="Drag to resize the account column, double-click to reset" />
               </th>
               {buckets.map((b) => <th key={b.key} scope="col" className="relative whitespace-nowrap px-2 py-1.5 text-right align-bottom font-medium" style={colStyle(colW)}>{stackLabel(b.label)}<ColResizer onResize={setColW} /></th>)}
-              <th scope="col" className="relative whitespace-nowrap bg-page px-2 py-1.5 text-right align-bottom font-medium" style={colStyle(colW)}><div>{data.period.key === 'month' ? 'Month' : data.period.label}</div><div className="font-normal text-muted">{periodLabel}</div><ColResizer onResize={setColW} /></th>
+              <th scope="col" className="relative whitespace-nowrap bg-total px-2 py-1.5 text-right align-bottom font-medium" style={colStyle(colW)}><div>{data.period.key === 'month' ? 'Month' : data.period.label}</div><div className="font-normal text-muted">{periodLabel}</div><ColResizer onResize={setColW} /></th>
             </tr>
           </thead>
           <tbody>
@@ -831,13 +811,13 @@ function BalanceSheet({ data }) {
     downloadCsv(`balance-sheet-${data.office.key}-${bs.asOf}.csv`, out);
   };
   const row = (key, label, now, prior, { depth = 0, bold = false, expandable = false, highlight = false, companies = 0 } = {}) => (
-    <tr key={key} className={`border-t border-[var(--line)] ${highlight ? 'border-l-2 border-l-[var(--series-3)]' : ''} ${bold && depth === 0 ? 'bg-page' : ''}`}>
+    <tr key={key} className={`border-t border-[var(--line)] ${highlight ? 'border-l-2 border-l-[var(--series-3)]' : ''} ${bold && depth === 0 ? 'bg-total' : ''}`}>
       <th scope="row" className={`px-2 py-1.5 text-left ${bold ? 'font-semibold' : 'font-normal'} ${highlight ? 'font-semibold' : ''}`} style={{ paddingLeft: 8 + depth * 16 }}>
         {expandable ? <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={isOpen(key)} onClick={() => toggle(key)}><Chevron open={isOpen(key)} />{label}</button> : label}
         {companies > 1 ? <span className="ml-1 text-[10px] text-muted">×{companies}</span> : null}
       </th>
       <td className="whitespace-nowrap px-2 py-1.5 text-right"><Money v={now} bold={bold} /></td>
-      <td className="whitespace-nowrap bg-page px-2 py-1.5 text-right"><Money v={prior} bold={bold} /></td>
+      <td className="whitespace-nowrap bg-total px-2 py-1.5 text-right"><Money v={prior} bold={bold} /></td>
     </tr>
   );
   const nodes = (list, prefix, depth) => list.flatMap((n) => {
@@ -853,8 +833,8 @@ function BalanceSheet({ data }) {
       {bs.sections.every((s) => !s.groups.length) ? <p className="py-6 text-center text-sm text-ink2">No balance sheet accounts in the ledger yet.</p> : (
         <div className="max-h-[560px] overflow-auto">
           <table className="w-full min-w-[420px] text-sm">
-            <thead className="sticky top-0 z-[1] bg-surface text-xs text-ink2 shadow-[0_1px_0_var(--line)]">
-              <tr><th scope="col" className="px-2 py-2 text-left font-medium">Account</th><th scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium"><div>{monthEndLabel(bs.asOf)}</div><div className="font-normal text-muted">As of</div></th><th scope="col" className="whitespace-nowrap bg-page px-2 py-2 text-right font-medium"><div>{monthEndLabel(bs.prior)}</div><div className="font-normal text-muted">A year earlier</div></th></tr>
+            <thead className="sticky top-0 z-[1] bg-thead text-xs text-theadInk shadow-[0_1px_0_var(--line)]">
+              <tr><th scope="col" className="px-2 py-2 text-left font-medium">Account</th><th scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium"><div>{monthEndLabel(bs.asOf)}</div><div className="font-normal text-muted">As of</div></th><th scope="col" className="whitespace-nowrap bg-total px-2 py-2 text-right font-medium"><div>{monthEndLabel(bs.prior)}</div><div className="font-normal text-muted">A year earlier</div></th></tr>
             </thead>
             <tbody>
               {bs.sections.flatMap((s) => [
@@ -920,9 +900,9 @@ function CombinedPl({ data, cols: gran = null, byOffice = null, focus = null, on
   const colLabel = (b) => (view === 'companies' ? (data.office.companies.find((c) => c.realmId === b.key)?.displayName || b.label) : b.label);
   const colCls = (key) => (byOffice ? `${focus && focus !== key ? 'opacity-40' : ''} ${focus === key ? 'bg-[color-mix(in_oklab,var(--series-1)_12%,var(--surface))]' : ''}` : '');
   const two = values === 'both'; // amount and % of income together in one cell per column (2026-10-29: no gap between them)
-  // byOffice: the row label is 200px wide so the "Grand total" column can be frozen next to it (amount 96px, 160px with the % beside it).
-  const labelW = byOffice ? 'w-[200px] min-w-[200px] max-w-[200px] overflow-hidden text-ellipsis' : '';
-  const stickyTotal = (z = 1) => (freeze ? `sticky left-[200px] z-[${z}] ${two ? 'w-[160px] min-w-[160px]' : 'w-[96px] min-w-[96px]'}` : '');
+  // byOffice: the row label is 260px wide and wraps (VJ 2026-10-29: never cut) so the "Grand total" column can be frozen next to it (amount 96px, 160px with the % beside it).
+  const labelW = byOffice ? 'w-[260px] min-w-[260px] max-w-[260px] whitespace-normal break-words' : '';
+  const stickyTotal = (z = 1) => (freeze ? `sticky left-[260px] z-[${z}] ${two ? 'w-[160px] min-w-[160px]' : 'w-[96px] min-w-[96px]'}` : '');
   const py = byOffice ? 'py-0.5' : 'py-1';
   // Expand all / Collapse all folds or opens every section and account, except the Income section, which stays open.
   // A click on any row still toggles that row by hand.
@@ -932,15 +912,15 @@ function CombinedPl({ data, cols: gran = null, byOffice = null, focus = null, on
   const income = types.Income || { periods: {}, total: 0 };
   const pctOf = (v, den) => (v == null || !den ? '–' : pct1(v / den));
   // Both: the amount with the % right beside it in the same cell (fixed 48px for the %, so amounts and % both stay aligned).
-  const show = (v, den) => (v == null ? '–' : values === 'pct' ? pctOf(v, den) : two ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><span>{money(v)}</span><span className="text-[11px] font-normal text-muted">{pctOf(v, den)}</span></span> : money(v));
+  const show = (v, den) => (v == null ? '–' : values === 'pct' ? pctOf(v, den) : two ? <span className="inline-grid grid-cols-[auto_48px] items-baseline gap-x-2"><span>{money(v)}</span><span className="text-xs font-normal text-muted">{pctOf(v, den)}</span></span> : money(v));
   const totalLabel = data.months.length === 1 ? monthLabel(data.months[0]) : `${monthLabel(data.months[0])} – ${monthLabel(data.months.at(-1))}`;
   const cell = (v, bold, den, blank, key) => <td key={key} className={`tabular whitespace-nowrap ${py} px-1.5 text-right align-top ${!v ? 'text-muted' : ''} ${bold ? 'font-semibold' : ''} ${colCls(key)}`}>{blank ? '' : show(v, den)}</td>;
   const line = (key, label, periods, total, { depth = 0, bold = false, expandable = false, isOpen = false, style = 'plain', companies = 0, blank = false, level = depth } = {}) => {
-    const totalCell = <td key="__total" className={`tabular whitespace-nowrap bg-page ${py} px-1.5 text-right align-top ${bold || style === 'subtotal' ? 'font-semibold' : 'font-medium'} ${stickyTotal()}`}>{blank ? '' : show(total, income.total)}</td>;
+    const totalCell = <td key="__total" className={`tabular whitespace-nowrap bg-total ${py} px-1.5 text-right align-top ${bold || style === 'subtotal' ? 'font-semibold' : 'font-medium'} ${stickyTotal()}`}>{blank ? '' : show(total, income.total)}</td>;
     const cells = cols.flatMap((b) => cell(periods[b.key], bold, income.periods[b.key], blank, b.key));
     return (
-      <tr key={key} className={`border-t border-[var(--line)] ${style === 'subtotal' || style === 'head' || style === 'total' ? 'bg-page' : ''}`}>
-        <th scope="row" className={`sticky left-0 z-[1] whitespace-nowrap px-2 ${py} text-left ${labelW} ${bold ? 'font-semibold' : 'font-normal'} ${style === 'subtotal' || style === 'head' ? 'bg-page' : 'bg-surface'}`} style={{ paddingLeft: 8 + depth * 16 }}>
+      <tr key={key} className={`border-t border-[var(--line)] ${style === 'subtotal' || style === 'head' || style === 'total' ? 'bg-total' : ''}`}>
+        <th scope="row" className={`sticky left-0 z-[1] whitespace-nowrap px-2 ${py} text-left ${labelW} ${bold ? 'font-semibold' : 'font-normal'} ${style === 'subtotal' || style === 'head' ? 'bg-total' : 'bg-surface'}`} style={{ paddingLeft: 8 + depth * 16 }}>
           {expandable ? (
             <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={isOpen} onClick={() => toggle(key, level)}>
               <Chevron open={isOpen} />{label}{companies > 1 ? <span className="ml-1 text-[10px] text-muted">×{companies}</span> : null}
@@ -986,7 +966,7 @@ function CombinedPl({ data, cols: gran = null, byOffice = null, focus = null, on
     }
     downloadCsv(`office-${data.office.key}-pl-${view}-${data.asOf}.csv`, [['Account', ...pl.buckets.map(colLabel), byOffice || 'Total'], ...flat]);
   };
-  const totalHead = <th key="__total" scope="col" className={`relative whitespace-nowrap bg-page px-1.5 py-1.5 text-right align-bottom font-medium ${freeze ? 'sticky left-[200px] z-[3]' : ''}`} style={resizable ? colStyle(colW) : undefined}><div>{byOffice || 'Total'}</div><div className="font-normal text-muted">{totalLabel}</div>{resizable && <ColResizer onResize={setColW} />}</th>;
+  const totalHead = <th key="__total" scope="col" className={`relative whitespace-nowrap bg-total px-1.5 py-1.5 text-right align-bottom font-medium ${freeze ? 'sticky left-[260px] z-[3]' : ''}`} style={resizable ? colStyle(colW) : undefined}><div>{byOffice || 'Total'}</div><div className="font-normal text-muted">{totalLabel}</div>{resizable && <ColResizer onResize={setColW} />}</th>;
   const officeOf = Object.fromEntries(offices.map((o) => [o.key, o]));
   // Companies view: the same two-line heads as Compare ("Admire Dental" muted over "Lincoln"), from the company's display name and short name.
   const companyOf = Object.fromEntries((data.office.companies || []).map((c) => [c.realmId, c]));
@@ -1010,11 +990,11 @@ function CombinedPl({ data, cols: gran = null, byOffice = null, focus = null, on
         <Seg small value={values} onChange={setValues} options={VALUE_OPTIONS} />
       </>, <button type="button" className="control h-8 text-sm" onClick={exportCsv}>Export CSV</button>)}>
       <div className={byOffice ? 'max-h-[75vh] overflow-auto' : 'overflow-x-auto'}>
-        <table className={`cols-lined w-full text-xs ${resizable && (colW || labelColW) ? '[&_td]:overflow-hidden [&_td]:text-ellipsis' : ''}`}
-          style={{ minWidth: narrow ? 0 : (byOffice ? 200 : labelColW || 240) + (cols.length + 1) * (resizable && colW ? colW : two ? 148 : 84), tableLayout: resizable && (colW || labelColW) ? 'fixed' : 'auto' }}>
-          <thead className={`text-xs text-ink2 ${byOffice ? 'sticky top-0 z-[2] bg-surface shadow-[0_1px_0_var(--line)]' : ''}`}>
+        <table className={`cols-lined report-table w-full ${resizable && (colW || labelColW) ? '[&_td]:overflow-hidden [&_td]:text-ellipsis' : ''}`}
+          style={{ minWidth: narrow ? 0 : (byOffice ? 260 : labelColW || 240) + (cols.length + 1) * (resizable && colW ? colW : two ? 148 : 84), tableLayout: resizable && (colW || labelColW) ? 'fixed' : 'auto' }}>
+          <thead className={`text-xs text-theadInk ${byOffice ? 'sticky top-0 z-[2] bg-thead shadow-[0_1px_0_var(--line)]' : ''}`}>
             <tr className="border-b border-[var(--line)]">
-              <th scope="col" className={`relative sticky left-0 z-[3] bg-surface px-2 py-1.5 text-left align-bottom font-medium ${labelW}`} style={resizable ? colStyle(labelColW) : undefined}>
+              <th scope="col" className={`relative sticky left-0 z-[3] bg-thead px-2 py-1.5 text-left align-bottom font-medium ${labelW}`} style={resizable ? colStyle(labelColW) : undefined}>
                 <span className="flex items-center gap-2">
                   <button type="button" className="whitespace-nowrap rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={all} onClick={() => { setAll((a) => !a); setOpen({}); }}>{all ? 'Collapse all' : 'Expand all'}</button>
                   {onFreeze && <button type="button" className="whitespace-nowrap rounded border border-[var(--line)] px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-page" aria-pressed={freezeOn} onClick={() => onFreeze(!freezeOn)} title="Keep the Grand total column in view while scrolling sideways">{freezeOn ? 'Unfreeze total' : 'Freeze total'}</button>}

@@ -2,21 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens. Series colors follow the entity: income is always slot 1, expenses slot 2,
-   net income slot 3; offices take slots 1-8 in a fixed order. Dark values are the same hues
-   re-stepped for the dark surface, not an automatic flip. */
+/* Design tokens (restyle 2026-10-29: cool slate page, white cards, a navy banner for the tab row, one deep-blue accent for every
+   pressed button). Series colors follow the entity: income is always slot 1, expenses slot 2, net income slot 3; offices take
+   slots 1-8 in a fixed order. Dark values are the same hues re-stepped for the dark surface, not an automatic flip. */
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #898781;
-  --line: #e1e0d9;
-  --axis: #c3c2b7;
-  --ring: rgba(11, 11, 11, 0.1);
-  --good: #006300;
-  --bad: #d03b3b;
+  --page: #f3f5f9;
+  --surface: #ffffff;
+  --ink: #0f1b2d;
+  --ink-2: #4a5668;
+  --muted: #8a94a6;
+  --line: #e2e7ef;
+  --axis: #c3ccd9;
+  --ring: rgba(15, 27, 45, 0.1);
+  --accent: #1f4e8c;
+  --accent-bright: #5aa9ff;
+  --banner: #1d4ed8;
+  --banner-2: #2f6fe4;
+  --banner-ink: #ffffff;
+  --banner-mark: #ffffff; /* the open tab's underline */
+  --banner-h: 48px; /* the banner's height, shared with the Ledgerview shell so the strips line up as one banner */
+  /* Theme page tokens (server/theme.js): the button row, the buttons, the table header and the total rows follow the card
+     colours until the Theme page sets them. */
+  --toolbar: var(--surface);
+  --toolbar-line: var(--line);
+  --button: var(--surface);
+  --button-ink: var(--ink);
+  --pressed: var(--accent);
+  --pressed-ink: #ffffff;
+  --thead: var(--surface);
+  --thead-ink: var(--ink-2);
+  --table-line: var(--line);
+  --total-row: var(--page);
+  --report-font: 14px; /* the Synopsis / Detailed P&L tables on Compare and combined views (VJ 2026-10-30: bigger) */
+  --card-title: 19px; /* the card titles "Synopsis P&L" / "Detailed P&L" in every table bar (VJ 2026-10-30: bigger text, same card) */
+  --good: #1a7f37;
+  --bad: #c93c3c;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -30,15 +51,19 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --muted: #898781;
-    --line: #2c2c2a;
-    --axis: #383835;
+    --page: #0b1220;
+    --surface: #141c2b;
+    --ink: #f3f6fb;
+    --ink-2: #b8c2d2;
+    --muted: #7f8a9c;
+    --line: #26314a;
+    --axis: #35425d;
     --ring: rgba(255, 255, 255, 0.1);
-    --good: #0ca30c;
+    --accent: #4d8fe0;
+    --accent-bright: #7cbcff;
+    --banner: #173fb0;
+    --banner-2: #2459c4;
+    --good: #3cbb5a;
     --bad: #e66767;
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -54,6 +79,7 @@
 html, body {
   background: var(--page);
   color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Grid items may shrink below their content (wide tables scroll inside their card instead of
@@ -64,32 +90,34 @@ html, body {
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--ring);
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 2px 8px rgba(15, 27, 45, 0.04);
 }
 
 .control {
-  background: var(--surface);
-  border: 1px solid var(--ring);
+  background: var(--button);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--button-ink);
   font-size: 13px;
   padding: 4px 10px;
   height: 32px;
 }
+.control:hover { border-color: var(--axis); }
 .control:focus-visible {
-  outline: 2px solid var(--series-1);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
 .seg {
   display: inline-flex;
   max-width: 100%;
-  border: 1px solid var(--ring);
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow-x: auto;
   scrollbar-width: none;
-  background: var(--surface);
+  background: var(--button);
   height: 32px;
 }
 .seg button {
@@ -100,12 +128,13 @@ html, body {
   color: var(--ink-2);
 }
 .seg button + button {
-  border-left: 1px solid var(--ring);
+  border-left: 1px solid var(--line);
 }
+.seg button:hover:not([aria-pressed='true']):not(:disabled) { background: var(--page); color: var(--ink); }
 .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 .seg button[aria-pressed='true'] {
-  background: var(--series-1);
-  color: #fff;
+  background: var(--pressed);
+  color: var(--pressed-ink);
 }
 
 /* Phones: segmented controls marked seg-fill span the full width with equal buttons. */
@@ -134,29 +163,52 @@ html, body {
   font-size: 12px;
 }
 
+/* The tab row as a blue banner (restyle 2026-10-29, navy -> clear blue and taller on VJ's 2026-10-30 note): white tab names, the open tab underlined in white. The filters
+   below it (when a tab does not carry them inline) stay on the page colour. */
+.app-banner {
+  background: linear-gradient(90deg, var(--banner) 0%, var(--banner-2) 100%);
+  color: var(--banner-ink);
+  min-height: var(--banner-h);
+  border-radius: 0; /* flat: continues the Ledgerview sidebar's brand strip as ONE banner (VJ 2026-10-30) */
+}
+.app-banner .tab { position: relative; color: rgba(255, 255, 255, 0.85); font-weight: 500; letter-spacing: 0.01em; transition: color 0.15s; }
+.app-banner .tab:hover { color: #fff; }
+.app-banner .tab.active { color: #fff; font-weight: 600; }
+.app-banner .tab.active::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--banner-mark); }
+.app-banner .banner-link { color: rgba(255, 255, 255, 0.8); }
+.app-banner .banner-link:hover { color: #fff; text-decoration: underline; }
+.app-banner .banner-brand { font-size: 18px; font-weight: 600; color: var(--banner-ink); letter-spacing: 0.01em; white-space: nowrap; }
+.app-banner .banner-logo { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; background: #fff; color: var(--banner); font-size: 12px; font-weight: 700; letter-spacing: 0; object-fit: contain; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.app-banner .banner-brand::after { content: ''; display: inline-block; width: 1px; height: 22px; margin: 0 8px 0 16px; vertical-align: middle; background: rgba(255, 255, 255, 0.25); }
+
 /* Column headers in capitals (VJ 2026-10-28); the muted second line of a header (period, "As of") stays as written. */
+thead { background: var(--thead); color: var(--thead-ink); }
 thead th { text-transform: uppercase; letter-spacing: 0.02em; }
-thead th .text-muted, thead th .text-accent { text-transform: none; letter-spacing: 0; }
+thead th .text-muted, thead th .text-accent, thead th .no-caps, thead th.no-caps { text-transform: none; letter-spacing: 0; }
 
 /* Button bars of the Financial KPIs pages: left group, then Accrual / Cash right after it (VJ 2026-10-29: not centred, close to the
    first buttons), the period buttons at the right. The zones wrap as whole units on a narrow screen: the left group keeps its line,
    Accrual / Cash and the period drop to a second line together (VJ 2026-10-29: the laptop screen split the buttons oddly). */
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 16px; width: 100%; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: color-mix(in oklab, var(--page) 75%, var(--surface)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 16px; width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--toolbar-line); background: var(--toolbar); box-shadow: 0 1px 2px rgba(15, 27, 45, 0.05); }
 .toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; flex: 0 0 auto; max-width: 100%; }
 .toolbar > div:first-child { flex: 0 1 auto; }
 .toolbar > div:last-child { margin-left: auto; }
 .toolbar > span:empty { display: none; }
 /* The identity line of a table bar (back, title, period, what is shown) always takes its own row, so the control rows below
    stack the same way on every panel whatever its width (2026-10-29: Synopsis and Detailed wrapped differently side by side). */
-.toolbar > div.toolbar-head { flex: 1 0 100%; }
+.toolbar > div.toolbar-head { flex: 1 0 100%; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
 /* The banner of a Compare / combined page: stays under the frozen tab row while the page scrolls (VJ 2026-10-29). */
 .toolbar.banner { position: sticky; top: var(--hdr, 0px); z-index: 15; }
 /* Combined / office page bars (period-left): the period buttons and Export CSV follow the other controls from the left; on Compare
    (full width) they stay at the right edge (2026-10-29). */
 .toolbar.period-left > div:last-child { margin-left: 0; }
-.toolbar .toolbar-title { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.toolbar .toolbar-title { font-size: var(--card-title); font-weight: 700; letter-spacing: -0.01em; color: var(--accent); white-space: nowrap; }
 .toolbar .toolbar-note { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
 .toolbar .toolbar-note.wrap { white-space: normal; } /* "Combine: A, B, C, …" may run over several lines */
 
+/* The report tables (Synopsis / Detailed P&L on Compare, combined and office pages): one size, set by --report-font; the column
+   headers keep their own small size. */
+.report-table { font-size: var(--report-font); }
+
 /* Thin vertical lines between the columns of the Compare and combined-view tables (VJ 2026-10-29: the figures were hard to read across). */
-.cols-lined th + th, .cols-lined th + td, .cols-lined td + td { border-left: 1px solid var(--line); }
+.cols-lined th + th, .cols-lined th + td, .cols-lined td + td { border-left: 1px solid var(--table-line); }

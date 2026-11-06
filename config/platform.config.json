@@ -6,7 +6,7 @@
     "tagline": "Financial reporting across every entity you manage",
     "logoText": "LV",
     "supportEmail": "support@ledgerview.demo",
-    "primaryColor": "#2a78d6"
+    "primaryColor": "#1f4e8c"
   },
   "auth": {
     "$comment": "demoMode seeds every sample user with demoPassword and lists demo accounts on the login page. Turn both off before real clients use it.",
@@ -94,7 +94,7 @@
         "label": "Overview",
         "icon": "home",
         "permission": "org.view",
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "reports",
@@ -144,6 +144,14 @@
         "id": "organizations",
         "label": "Organizations",
         "icon": "grid",
+        "enabled": true
+      },
+      {
+        "$comment": "The theme configurator: colours of the banner, side panel, button rows, table headers, page and the logo, for both apps (server/theme.js, defaults in config/theme.json).",
+        "id": "theme",
+        "label": "Theme",
+        "icon": "palette",
+        "path": "/admin/theme",
         "enabled": true
       }
     ]

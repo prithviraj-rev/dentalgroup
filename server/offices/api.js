@@ -265,6 +265,24 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     return { groups: b.list.map((x, i) => ({ key: x.key, label: x.label, color: (i % 8) + 1, realmIds: realmsOf[x.key] })), names };
   }));
 
+  // The QuickBooks accounts behind every statement row of one office (children with activity).
+  const accountsOf = (st) => Object.fromEntries(st.rows.map((r) => [r.key, r.children.filter((c) => c.period || c.prior).map(({ account, fullName, period, prior, companies }) => ({ account, fullName, period, prior, companies }))]));
+  /** Several offices as one: every row summed, the accounts merged by name (the Grand total column of Compare, a Side by side column). */
+  const consolidate = (figures) => {
+    const rowKeys = cfg.rows.map((r) => r.key);
+    const sumOf = (pick) => Object.fromEntries(rowKeys.map((k) => [k, round2(figures.reduce((t, o) => t + (pick(o)[k] || 0), 0))]));
+    const merged = Object.fromEntries(rowKeys.map((k) => [k, new Map()]));
+    for (const fig of figures) for (const [k, list] of Object.entries(accountsOf(fig.statement))) for (const c of list) {
+      const m = merged[k].get(c.fullName) || { account: c.account, fullName: c.fullName, period: 0, prior: 0, offices: 0 };
+      m.period = round2(m.period + c.period); m.prior = round2(m.prior + c.prior); m.offices += 1;
+      merged[k].set(c.fullName, m);
+    }
+    const sorted = (a, b) => (cfg.statement.sortAccounts === 'number' ? a.fullName.localeCompare(b.fullName, undefined, { numeric: true }) : Math.abs(b.period) - Math.abs(a.period) || a.fullName.localeCompare(b.fullName));
+    const monthly = Object.fromEntries(rowKeys.map((k) => [k, {}])); // row key -> { YYYY-MM: total }, the months of the window
+    for (const fig of figures) for (const r of fig.statement.rows) for (const [m, v] of Object.entries(r.months || {})) monthly[r.key][m] = round2((monthly[r.key][m] || 0) + v);
+    return { values: sumOf((o) => o.values), prior: sumOf((o) => o.prior), accounts: Object.fromEntries(rowKeys.map((k) => [k, [...merged[k].values()].sort(sorted)])), monthly };
+  };
+
   // ---------- Compare offices: the statement rows side by side, one column per office, consolidated first ----------
   router.get(`${P}/compare`, wrap((req) => {
     const f = filtersOf(req);
@@ -277,18 +295,6 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
     const book = canonicalBook(accountBook(db), ids);
     const ctx = context(ids, f, book);
     const figures = offices.map((o) => officeFigures(o, f, ctx));
-    const rowKeys = cfg.rows.map((r) => r.key);
-    const sumOf = (pick) => Object.fromEntries(rowKeys.map((k) => [k, round2(figures.reduce((t, o) => t + (pick(o)[k] || 0), 0))]));
-    // The QuickBooks accounts behind every row, per office (statement children with activity) and merged across the
-    // offices by account name for the consolidated column.
-    const accountsOf = (st) => Object.fromEntries(st.rows.map((r) => [r.key, r.children.filter((c) => c.period || c.prior).map(({ account, fullName, period, prior, companies }) => ({ account, fullName, period, prior, companies }))]));
-    const merged = Object.fromEntries(rowKeys.map((k) => [k, new Map()]));
-    for (const fig of figures) for (const [k, list] of Object.entries(accountsOf(fig.statement))) for (const c of list) {
-      const m = merged[k].get(c.fullName) || { account: c.account, fullName: c.fullName, period: 0, prior: 0, offices: 0 };
-      m.period = round2(m.period + c.period); m.prior = round2(m.prior + c.prior); m.offices += 1;
-      merged[k].set(c.fullName, m);
-    }
-    const sorted = (a, b) => (cfg.statement.sortAccounts === 'number' ? a.fullName.localeCompare(b.fullName, undefined, { numeric: true }) : Math.abs(b.period) - Math.abs(a.period) || a.fullName.localeCompare(b.fullName));
     // The combined profit and loss over the period months, one column per office (the detail under the statement).
     const months = monthsBetween(f.window.from, f.window.to);
     const pl = cfg.page.sections.includes('pl') ? comparePl({ offices, book, lines: ctx.lines, months }) : null;
@@ -296,11 +302,33 @@ export function createOfficesRouter(db, { parseFilters, file = undefined, base =
       asOf: f.asOf, to: f.to, from: f.from, period: periodsOut(f), basis: f.basis, months,
       rows: cfg.rows.map(({ key, label, role }) => ({ key, label, role })),
       collectionsKey: cfg.rows.find((r) => r.role === 'collections')?.key || null,
-      consolidated: { values: sumOf((o) => o.values), prior: sumOf((o) => o.prior), accounts: Object.fromEntries(rowKeys.map((k) => [k, [...merged[k].values()].sort(sorted)])) },
+      consolidated: consolidate(figures),
       offices: figures.map(({ statement, row: _r, flags: _f, ...o }) => ({ ...o, accounts: accountsOf(statement) })),
       pl,
       page: cfg.page,
       source: (({ byCompany, ...s }) => s)(ctx.source),
+    };
+  }));
+
+  // ---------- One set of companies over one window: a column of the Side by side card (VJ 2026-10-29: A this year next to A last
+  // year, A next to X + Y + Z, A's March next to B's March). companies = realm ids; the offices holding them are consolidated. ----------
+  router.get(`${P}/set`, wrap((req) => {
+    const f = filtersOf(req);
+    const picked = [...new Set(String(req.query.companies || '').split(',').map((s) => s.trim()).filter(Boolean))];
+    if (!picked.length || picked.length > 80) throw httpError(400, 'companies must list 1..80 realm ids');
+    const offices = officesOf(req, { ...f, offices: picked }); // a practice and its sub-DSO stay one office
+    if (!offices.length) throw httpError(404, 'Companies not found');
+    const ids = idsOf(offices);
+    const book = canonicalBook(accountBook(db), ids);
+    const ctx = context(ids, f, book);
+    const figures = offices.map((o) => officeFigures(o, f, ctx));
+    return {
+      asOf: f.asOf, to: f.to, from: f.from, period: periodsOut(f), basis: f.basis, months: monthsBetween(f.window.from, f.window.to),
+      rows: cfg.rows.map(({ key, label, role }) => ({ key, label, role })),
+      collectionsKey: cfg.rows.find((r) => r.role === 'collections')?.key || null,
+      ...consolidate(figures),
+      offices: offices.map((o) => ({ key: o.key, name: o.name })),
+      companies: offices.flatMap((o) => o.companies.map((c) => ({ realmId: c.realmId, name: c.name }))),
     };
   }));
 

@@ -16,7 +16,7 @@ test('client-sheet offices config: extends offices.json, rows hold exactly the a
   assert.equal(sheet.cashFlow.includeLoanPayments, true);
   assert.equal(cfg.cashFlow.includeLoanPayments, false);
   assert.equal(sheet.statement.rollUpSubAccounts, 'matched');
-  assert.deepEqual(sheet.page.sections, ['statement', 'pl'], 'statement plus the QuickBooks-style profit and loss');
+  assert.deepEqual(sheet.page.sections, ['statement', 'pl', 'sideBySide'], 'statement plus the QuickBooks-style profit and loss, then the Side by side card on Compare');
   assert.deepEqual(cfg.page.sections, ['tiles', 'statement', 'pl', 'balanceSheet', 'trends']);
   assert.throws(() => loadOfficesConfig(tmp({ ...base, page: { sections: ['charts'] } })), /page.sections/);
   const { columns, buckets, ...sheetPf } = sheet.page.portfolio;
@@ -301,6 +301,8 @@ test('display names: naming.companies by the first company, pairNote for two-com
   assert.deepEqual(periodWindow('2026-09', 'year:2026'), { key: 'year:2026', label: '2026', from: '2026-01', to: '2026-09', priorFrom: '2025-01', priorTo: '2025-09' }, 'the running year ends at asOf');
   assert.equal(sheet.page.titles.statement, 'Synopsis P&L');
   assert.equal(sheet.page.titles.pl, 'Detailed P&L');
+  assert.equal(sheet.page.titles.sideBySide, 'Synopsis comparison');
+  assert.equal(cfg.page.titles.sideBySide, 'Synopsis comparison', 'default');
   assert.deepEqual(sheet.page.titles.combined, { statement: 'Combined Synopsis', pl: 'Combined Details' }, 'VJ 2026-10-29: a combined view has its own two titles');
   assert.deepEqual(cfg.page.titles.combined, { statement: 'Combined statement', pl: 'Combined profit and loss' }, 'defaults');
   assert.deepEqual(sheet.page.split, [5, 7], 'VJ 2026-10-29 call: about 40 / 60 so the statement stays readable on a laptop');

@@ -14,6 +14,7 @@ import GroupOverview from './components/GroupOverview.jsx';
 import CashBalance from './components/CashBalance.jsx';
 import Offices from './components/Offices.jsx';
 import KpiDashboard from './components/KpiDashboard.jsx';
+import CompareCharts from './components/CompareCharts.jsx';
 import Toast from './components/Toast.jsx';
 
 const TABS = [
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'offices', label: 'Offices', enabled: (c) => c.offices?.enabled !== false },
   { id: 'officesSheet', label: (c) => c.officesSheet?.label || 'Financial KPIs', enabled: (c) => c.offices?.enabled !== false && c.officesSheet?.enabled !== false },
   { id: 'kpi', label: (c) => c.kpiDashboard?.label || 'KPI dashboard', enabled: (c) => c.offices?.enabled !== false && c.kpiDashboard?.enabled !== false && (c.kpiDashboard?.source !== 'officesSheet' || c.officesSheet?.enabled !== false) },
+  { id: 'charts', label: (c) => c.compareCharts?.label || 'Compare charts', enabled: (c) => c.offices?.enabled !== false && c.compareCharts?.enabled !== false && (c.compareCharts?.source !== 'officesSheet' || c.officesSheet?.enabled !== false) },
   { id: 'group', label: 'Group overview', enabled: (c) => c.groupOverview?.enabled !== false },
   { id: 'cash', label: 'Cash & balance sheet', enabled: (c) => c.finance?.enabled !== false },
   { id: 'coa', label: 'Chart of accounts', enabled: (c) => c.chartOfAccounts.enabled },
@@ -87,6 +89,15 @@ function initialState(config) {
   };
 }
 
+/** True inside the Ledgerview Reports page (an iframe): the shell's sidebar brands the banner, the dashboard shows only its tabs. */
+const EMBEDDED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+/** config/theme.json: the server renders the colour overrides as a stylesheet (theme.css); one <style> element carries it. */
+function applyTheme(theme) {
+  if (!theme) return;
+  let el = document.getElementById('theme-config');
+  if (!el) { el = document.createElement('style'); el.id = 'theme-config'; document.head.appendChild(el); }
+  el.textContent = theme.css || '';
+}
 export default function App() {
   const [config, setConfig] = useState(null);
   const [offices, setOffices] = useState([]);
@@ -131,6 +142,7 @@ export default function App() {
       .then((c) => {
         if (cancelled) return;
         configureFormat(c);
+        applyTheme(c.theme);
         const s = initialState(c);
         setConfig(c);
         setFilters(s.category ? { ...s.filters, office: `${CATEGORY}${s.category}` } : s.filters);
@@ -311,7 +323,7 @@ export default function App() {
     );
   }
 
-  const inlineControls = tab === 'officesSheet' && config.officesSheet?.controls === 'inline';
+  const inlineControls = (tab === 'officesSheet' && config.officesSheet?.controls === 'inline') || tab === 'charts'; // the Compare charts tab holds its own periods and companies: only Accrual / Cash and Sync, in its own bar
   const controlsEl = <Controls config={config} offices={offices} filters={rawFilters} onChange={setFilters} periods={periodOptions} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact={tab !== 'dashboard'} categories={categories} groups={groups} names={groupNames} canSync={meta?.can?.sync !== false} lastSync={meta?.lastSync || null} inline={inlineControls} />;
   const metricLabel = metricOf(filters.metric).label;
   const compareMax = config.compare.maxOffices ?? undefined;
@@ -319,31 +331,40 @@ export default function App() {
 
   return (
     <div className="w-full px-1 pb-1">
-      <header ref={headerRef} className="sticky top-0 z-20 -mx-1 mb-1 flex flex-col gap-0 bg-page px-1">
+      <header ref={headerRef} className="sticky top-0 z-20 -mx-1 mb-1 flex flex-col gap-0 bg-page">
         {config.dashboard.showHeader !== false && ( // app.config.json dashboard.showHeader: title + "N offices connected · last sync · data range" line
-          <div>
+          <div className="px-2 pt-1">
             <h1 className="text-lg font-semibold sm:text-xl">{config.dashboard.title}</h1>
             <p className="text-sm text-ink2">{subtitle}</p>
           </div>
         )}
-        {/* Tabs on the top line (Manage connections at its right); the filters sit below, or in the page's own bar (officesSheet.controls = inline). */}
-        <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b border-[var(--line)]">
-          {visibleTabs.length > 1 ? (
-            <nav className="flex shrink-0 gap-1 overflow-x-auto [scrollbar-width:none]" role="tablist">
-              {visibleTabs.map((t) => (
-                <button
-                  key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-1.5 text-sm ${tab === t.id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink2 hover:text-ink'}`}
-                >
-                  {typeof t.label === 'function' ? t.label(config) : t.label}
-                </button>
-              ))}
-            </nav>
-          ) : <span />}
-          {meta?.can?.manageConnections !== false && <a className="pb-1.5 text-xs text-accent hover:underline" href={`${API_BASE}/connections`} target="_blank" rel="noreferrer">Manage connections ↗</a>}
+        {/* Tabs on the top line as a navy banner (CSS .app-banner; the product name at its left when showHeader is off, Manage connections
+            at its right); the filters sit below, or in the page's own bar (officesSheet.controls = inline). */}
+        <div className="app-banner flex flex-wrap items-end justify-between gap-x-5 gap-y-1 px-2">
+          <div className="flex min-w-0 items-center">
+            {config.dashboard.showHeader === false && !EMBEDDED && ( // standalone only: inside Ledgerview the sidebar's brand strip is the banner's left end and the tabs follow it directly (VJ 2026-10-30: one product, one banner)
+              <span className="banner-brand hidden items-center gap-2 self-center sm:inline-flex">
+                {config.theme?.brand?.logoUrl && <img className="banner-logo" src={config.theme.brand.logoUrl} alt="" />}
+                <span>{config.dashboard.title}</span>
+              </span>
+            )}
+            {visibleTabs.length > 1 ? (
+              <nav className="flex shrink-0 gap-1 overflow-x-auto [scrollbar-width:none]" role="tablist">
+                {visibleTabs.map((t) => (
+                  <button
+                    key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+                    className={`tab shrink-0 whitespace-nowrap px-4 py-3 text-base ${tab === t.id ? 'active' : ''}`}
+                  >
+                    {typeof t.label === 'function' ? t.label(config) : t.label}
+                  </button>
+                ))}
+              </nav>
+            ) : <span />}
+          </div>
+          {meta?.can?.manageConnections !== false && <a className="banner-link pb-3 text-sm" href={`${API_BASE}/connections`} target="_blank" rel="noreferrer">Manage connections ↗</a>}
         </div>
-        {!inlineControls && controlsEl}
-        {category && <p className="text-xs text-ink2">Showing {category.dimension ? `${category.dimension}: ` : ''}<b>{category.label}</b>, {category.realmIds.length} {category.realmIds.length === 1 ? 'office' : 'offices'} combined.</p>}
+        {!inlineControls && <div className="px-1 pt-1">{controlsEl}</div>}
+        {category && <p className="px-1 text-xs text-ink2">Showing {category.dimension ? `${category.dimension}: ` : ''}<b>{category.label}</b>, {category.realmIds.length} {category.realmIds.length === 1 ? 'office' : 'offices'} combined.</p>}
       </header>
 
       {error && <ErrorCard error={error} onRetry={() => { setError(null); setReloadKey((k) => k + 1); }} />}
@@ -392,6 +413,12 @@ export default function App() {
         <KpiDashboard config={config} filters={filters} officeParam={officeParam} reloadKey={reloadKey}
           onOpenOffice={(id) => { setFilters((f) => ({ ...f, office: id })); setTab(config.kpiDashboard?.source === 'offices' ? 'offices' : 'officesSheet'); window.scrollTo(0, 0); }} />
       ))}
+
+      {!error && !waitingForCategory && tab === 'charts' && (
+        <CompareCharts key={`charts-${filters.basis || ''}`} config={config} filters={filters} officeParam={officeParam} reloadKey={reloadKey} lastFull={lastFull}
+          base={config.compareCharts?.source === 'offices' ? 'office-view' : config.officesSheet.apiPath}
+          controls={(parts) => <Controls config={config} offices={offices} filters={rawFilters} onChange={setFilters} periods={periodOptions} yoy={yoy} onYoy={setYoy} onSync={onSync} syncing={syncing} compact categories={categories} groups={groups} names={groupNames} canSync={meta?.can?.sync !== false} lastSync={meta?.lastSync || null} inline parts={parts} />} />
+      )}
 
       {!error && !waitingForCategory && tab === 'coa' && (isCompare && !compareReady ? (
         <div className="card px-6 py-12 text-center text-sm text-ink2">

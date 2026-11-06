@@ -6,6 +6,7 @@ import { syncAll } from '../sync.js';
 import { issueSession, clearSession, readSession, verifyPassword, hashPassword } from './auth.js';
 import { uniqueSlug, prand } from './store.js';
 import { publicConfig } from './config.js';
+import { themeFor, saveTheme, clearTheme, THEME_GROUPS } from '../theme.js';
 
 const now = () => new Date().toISOString();
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -74,7 +75,29 @@ export function createPlatformRouter(db, cfg) {
     return { user: { id: u.id, email: u.email, name: u.name, isPlatformAdmin: Boolean(u.is_platform_admin) }, orgs };
   }
 
-  r.get('/config', (req, res) => res.json(publicConfig(cfg)));
+  // The dashboard's tab row, so the shell draws the SAME banner on every page (VJ 2026-10-30): app.config.json dashboard.tabs
+  // with the labels the dashboard shows (configured labels for the Financial KPIs, KPI dashboard and Compare charts tabs).
+  const TAB_LABELS = { executive: 'Executive', dashboard: 'Dashboard', analysis: 'Analysis', categories: 'Category compare', offices: 'Offices', group: 'Group overview', cash: 'Cash & balance sheet', coa: 'Chart of accounts' };
+  const dashboardTabs = () => (appConfig.dashboard.tabs || []).map((id) => ({ id, label: id === 'officesSheet' ? appConfig.officesSheet?.label : id === 'kpi' ? appConfig.kpiDashboard?.label : id === 'charts' ? appConfig.compareCharts?.label : TAB_LABELS[id] || id }));
+  r.get('/config', (req, res) => { // theme = config/theme.json + what the Theme page saved; reports.title / tabs = the dashboard banner
+    const pub = publicConfig(cfg);
+    res.json({ ...pub, theme: themeFor(db), reports: { ...pub.reports, title: appConfig.dashboard.title, defaultTab: appConfig.dashboard.defaultTab, tabs: dashboardTabs() } });
+  });
+
+  // ---------- theme (platform admins): the colours and logo of both apps, kept in pf_meta so they survive deploys ----------
+  r.get('/admin/theme', requireUser, requirePlatformAdmin, (req, res) => res.json({ theme: themeFor(db), groups: THEME_GROUPS }));
+  r.post('/admin/theme', requireUser, requirePlatformAdmin, (req, res) => {
+    let saved;
+    try { saved = saveTheme(db, req.body || {}); } catch (err) { return res.status(400).json({ error: err.message }); }
+    const n = Object.keys(saved.colors).length + Object.keys(saved.dark).length;
+    audit(null, req.user.id, 'theme.updated', `${n} colour${n === 1 ? '' : 's'} set${saved.brand.logoUrl ? ', logo image' : ''}${saved.brand.logoText ? `, logo "${saved.brand.logoText}"` : ''}`);
+    res.json({ theme: themeFor(db), groups: THEME_GROUPS });
+  });
+  r.delete('/admin/theme', requireUser, requirePlatformAdmin, (req, res) => {
+    clearTheme(db);
+    audit(null, req.user.id, 'theme.reset', 'Theme back to config/theme.json');
+    res.json({ theme: themeFor(db), groups: THEME_GROUPS });
+  });
 
   r.get('/demo-accounts', (req, res) => {
     if (!(cfg.auth.demoMode && cfg.auth.showDemoAccounts)) return res.json({ accounts: [] });

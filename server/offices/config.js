@@ -124,8 +124,8 @@ export function loadOfficesConfig(file = path.resolve(ROOT, appConfig.offices?.f
   const sortAccounts = raw.statement?.sortAccounts ?? 'amount';
   if (!['amount', 'number'].includes(sortAccounts)) throw new Error(`${name}: statement.sortAccounts must be amount | number`);
   const statement = { rollUpSubAccounts: rollUp, sortAccounts };
-  const SECTIONS = ['tiles', 'statement', 'pl', 'balanceSheet', 'trends'];
-  const sections = raw.page?.sections ?? SECTIONS;
+  const SECTIONS = ['tiles', 'statement', 'pl', 'balanceSheet', 'trends', 'sideBySide']; // sideBySide = the Side by side card on Compare (VJ 2026-10-29)
+  const sections = raw.page?.sections ?? SECTIONS.filter((x) => x !== 'sideBySide'); // sideBySide is opt-in
   if (!Array.isArray(sections) || !sections.length || sections.some((x) => !SECTIONS.includes(x))) throw new Error(`${name}: page.sections must be a non-empty list from ${SECTIONS.join(' | ')}`);
   const memo = raw.page?.memo ?? true;
   if (typeof memo !== 'boolean') throw new Error(`${name}: page.memo must be true or false`);
@@ -188,7 +188,8 @@ export function loadOfficesConfig(file = path.resolve(ROOT, appConfig.offices?.f
   // titles.combined = the two titles on a combined view (VJ 2026-10-29: "Combined Synopsis" / "Combined Details").
   const tRaw = raw.page?.titles || {};
   if (!isObj(tRaw) || (tRaw.combined !== undefined && !isObj(tRaw.combined))) throw new Error(`${name}: page.titles must be { statement, pl, combined: { statement, pl } }`);
-  const titles = { statement: 'Office statement', pl: 'Combined profit and loss', ...tRaw, combined: { statement: 'Combined statement', pl: 'Combined profit and loss', ...(tRaw.combined || {}) } };
+  const titles = { statement: 'Office statement', pl: 'Combined profit and loss', sideBySide: 'Synopsis comparison', ...tRaw, combined: { statement: 'Combined statement', pl: 'Combined profit and loss', ...(tRaw.combined || {}) } };
+  if (typeof titles.sideBySide !== 'string' || !titles.sideBySide.trim()) throw new Error(`${name}: page.titles.sideBySide must be a non-empty string`);
   for (const k of ['statement', 'pl']) {
     if (typeof titles[k] !== 'string' || !titles[k].trim()) throw new Error(`${name}: page.titles.${k} must be a non-empty string`);
     if (typeof titles.combined[k] !== 'string' || !titles.combined[k].trim()) throw new Error(`${name}: page.titles.combined.${k} must be a non-empty string`);
@@ -196,7 +197,7 @@ export function loadOfficesConfig(file = path.resolve(ROOT, appConfig.offices?.f
   // page.split: grid columns (of 12) for the statement and the P&L when they sit side by side (VJ 2026-10-29: 5 and 7, about 40 / 60).
   const split = raw.page?.split ?? [6, 6];
   if (!Array.isArray(split) || split.length !== 2 || split.some((n) => !Number.isInteger(n) || n < 1) || split[0] + split[1] !== 12) throw new Error(`${name}: page.split must be two whole numbers adding up to 12, e.g. [3, 9] (the statement's and the P&L's share of the width side by side)`);
-  const page = { sections, memo, portfolio, titles: { statement: titles.statement, pl: titles.pl, combined: { statement: titles.combined.statement, pl: titles.combined.pl } }, split: [split[0], split[1]] };
+  const page = { sections, memo, portfolio, titles: { statement: titles.statement, pl: titles.pl, sideBySide: titles.sideBySide, combined: { statement: titles.combined.statement, pl: titles.combined.pl } }, split: [split[0], split[1]] };
   // picker: the header company picker in groups by company (not by office): same shape as page.portfolio.buckets
   // (a company goes to the first group listing it in companies, else to the first group whose categories hold its
   // Company type, else to rest). null = the page.portfolio.buckets by office.

@@ -41,16 +41,17 @@ const cookies = {
 const orgId = process.env.ORG || '1';
 const SCENARIOS = [
   ['admin', '/app/admin'],
-  ['admin', `/app/o/${orgId}/overview`],
+  ['admin', '/app/admin/theme'],
+  ['admin', `/app/o/${orgId}/reports`],
   ['admin', `/app/o/${orgId}/users`],
-  ['dana', `/app/o/${orgId}/overview`],
+  ['dana', `/app/o/${orgId}`],
   ['dana', `/app/o/${orgId}/reports`],
   ['dana', `/app/o/${orgId}/entities`],
   ['dana', `/app/o/${orgId}/users`],
   ['dana', `/app/o/${orgId}/sync`],
   ['dana', `/app/o/${orgId}/activity`],
   ['dana', `/app/o/${orgId}/settings`],
-  ['priya', `/app/o/${orgId}/overview`],
+  ['priya', `/app/o/${orgId}/reports`],
   ['priya', `/app/o/${orgId}/users`],
 ];
 let failures = 0;

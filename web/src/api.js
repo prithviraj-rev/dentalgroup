@@ -35,6 +35,7 @@ export const api = {
   officeDelete: (id, base = 'office-view') => request(`/api/${base}/setup/${id}`, { method: 'DELETE' }),
   officeGroups: (base = 'office-view') => request(`/api/${base}/groups`),
   officeCompare: (filters, base = 'office-view') => request(`/api/${base}/compare?${qs(filters)}`),
+  officeSet: (filters, base = 'office-view') => request(`/api/${base}/set?${qs(filters)}`), // one Side by side column: companies=id,id over period / from / to
   officeDetail: (key, filters, base = 'office-view') => request(`/api/${base}/${encodeURIComponent(key)}?${qs(filters)}`),
   // KPI dashboard: path is app.config.json kpiDashboard.apiPath.
   kpiDashboard: (filters, path = 'kpi-dashboard') => request(`/api/${path}?${qs(filters)}`),

@@ -12,6 +12,7 @@ import Users from './pages/Users.jsx';
 import Sync from './pages/Sync.jsx';
 import Activity from './pages/Activity.jsx';
 import Settings from './pages/Settings.jsx';
+import Theme from './pages/Theme.jsx';
 
 const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
@@ -21,6 +22,14 @@ export function can(org, perm) {
   return Boolean(org?.permissions?.includes('*') || org?.permissions?.includes(perm));
 }
 
+/** config/theme.json: the server renders the colour overrides as a stylesheet (theme.css); one <style> element carries it. */
+export function applyTheme(theme) {
+  if (!theme) return;
+  let el = document.getElementById('theme-config');
+  if (!el) { el = document.createElement('style'); el.id = 'theme-config'; document.head.appendChild(el); }
+  el.textContent = theme.css || '';
+}
+
 function Root() {
   const [cfg, setCfg] = useState(null);
   const [me, setMe] = useState(undefined); // undefined = loading, null = signed out
@@ -28,14 +37,14 @@ function Root() {
 
   const refreshMe = useCallback(() => api.get('/me').then(setMe).catch((e) => (e.status === 401 ? setMe(null) : setError(e.message))), []);
   useEffect(() => {
-    api.get('/config').then((c) => { setCfg(c); document.title = c.platform.name; }).catch((e) => setError(e.message));
+    api.get('/config').then((c) => { setCfg(c); applyTheme(c.theme); document.title = c.platform.name; }).catch((e) => setError(e.message));
     refreshMe();
   }, [refreshMe]);
 
   if (error) return <div className="mx-auto max-w-lg p-6"><ErrorNote error={error} onRetry={() => window.location.reload()} /></div>;
   if (!cfg || me === undefined) return <div className="mx-auto max-w-lg p-6"><Loading rows={2} /></div>;
 
-  const value = { cfg, me, setMe, refreshMe, signOut: async () => { await api.post('/logout'); setMe(null); } };
+  const value = { cfg, setCfg, me, setMe, refreshMe, signOut: async () => { await api.post('/logout'); setMe(null); } };
   return (
     <AppCtx.Provider value={value}>
       <Routes>
@@ -44,6 +53,7 @@ function Root() {
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
             <Route path="/admin" element={me?.user.isPlatformAdmin ? <Organizations /> : <Navigate to="/" replace />} />
+            <Route path="/admin/theme" element={me?.user.isPlatformAdmin ? <Theme /> : <Navigate to="/" replace />} />
             <Route path="/o/:orgId" element={<OrgScope />}>
               <Route index element={<HomeRedirect />} />
               <Route path="overview" element={<Guard module="overview"><Overview /></Guard>} />
@@ -98,7 +108,7 @@ function Guard({ module, children }) {
 function homeModule(cfg, org) {
   const items = cfg.navigation.org.filter((n) => n.enabled !== false && (!n.permission || can(org, n.permission)));
   const home = items.find((n) => n.id === cfg.navigation.home);
-  return (home || items[0] || { id: 'overview' }).id;
+  return (home || items[0] || { id: 'reports' }).id;
 }
 
 function HomeRedirect() {
